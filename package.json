@@ -22,8 +22,10 @@
   "homepage": "https://github.com/Plain-Insight/plain_back#readme",
   "dependencies": {
     "cors": "^2.8.5",
+    "csv-writer": "^1.6.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "fast-csv": "^5.0.5",
     "node-fetch": "^3.3.2"
   }
 }
