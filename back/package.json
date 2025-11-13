@@ -1,0 +1,22 @@
+{
+  "name": "database-project-backend",
+  "version": "1.0.0",
+  "description": "Backend server for stock data project with Kiwoom API integration",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "keywords": ["stock", "kiwoom", "api", "nodejs"],
+  "author": "YUNCHANGHYEOK",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

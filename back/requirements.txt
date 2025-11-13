@@ -1,0 +1,32 @@
+# 백엔드 Python 의존성 목록
+
+# 웹 프레임워크
+flask==3.0.0
+flask-cors==4.0.0
+
+# 데이터 처리 및 분석
+pandas==2.1.4
+numpy==1.24.3
+yfinance==0.2.28
+
+# 이미지 처리 및 시각화
+opencv-python==4.8.1.78
+matplotlib==3.7.2
+pillow==10.0.1
+
+# 엑셀 파일 처리
+openpyxl==3.1.2
+
+# 키움증권 API
+pykiwoom==0.2.7
+pywin32==306
+pyqt5==5.15.10
+
+# HTTP 요청
+requests==2.31.0
+
+# 환경 변수
+python-dotenv==1.0.0
+
+# 개발 도구
+jupyter==1.0.0
