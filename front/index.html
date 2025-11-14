@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 주식 데이터 분석</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>📊 주식 데이터 분석 플랫폼</h1>
+        <p>한국 주식 시장 데이터를 간단하게 확인하세요!</p>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h2>🔥 오늘의 인기 종목</h2>
+            <div class="stock-grid" id="stockGrid">
+                <div class="stock-card">
+                    <h3>삼성전자</h3>
+                    <p class="symbol">005930</p>
+                    <p class="price">₩75,000</p>
+                    <p class="change positive">+1,000 (+1.35%)</p>
+                </div>
+                <div class="stock-card">
+                    <h3>SK하이닉스</h3>
+                    <p class="symbol">000660</p>
+                    <p class="price">₩128,000</p>
+                    <p class="change negative">-2,000 (-1.54%)</p>
+                </div>
+                <div class="stock-card">
+                    <h3>NAVER</h3>
+                    <p class="symbol">035420</p>
+                    <p class="price">₩195,000</p>
+                    <p class="change positive">+5,000 (+2.63%)</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <h2>✨ 주요 기능</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="icon">📈</div>
+                    <h3>실시간 주가</h3>
+                    <p>한국 주식의 실시간 가격 정보를 확인하세요</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">📊</div>
+                    <h3>차트 분석</h3>
+                    <p>직관적인 차트로 주가 움직임을 분석하세요</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🔍</div>
+                    <h3>종목 검색</h3>
+                    <p>원하는 종목을 빠르게 찾아보세요</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta">
+            <h2>지금 바로 시작하세요!</h2>
+            <button onclick="refreshData()" class="cta-button">📊 데이터 새로고침</button>
+            <p class="update-info" id="updateInfo">마지막 업데이트: <span id="lastUpdate">로딩 중...</span></p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 주식 데이터 분석 플랫폼. Made with ❤️</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
