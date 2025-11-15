@@ -159,13 +159,56 @@ async function callKiwoomAPI() {
   });
 }
 
-// 키움 API 호가 데이터로 주식 정보 추출 (실제 작동하는 ka10004만 사용)
-async function getKiwoomStockData(token, symbol, stockName) {
+// 키움 API 다중 데이터 요청 함수
+async function callMultipleKiwoomAPIs(token, symbol, stockName) {
   const https = require('https');
   
   return new Promise((resolve) => {
-    console.log(`📊 ${stockName} (${symbol}) 호가 데이터 조회 중...`);
+    const results = {
+      symbol: symbol,
+      name: stockName,
+      currentPrice: null,
+      bidAsk: null,
+      stockInfo: null,
+      dailyChart: null
+    };
     
+    let completedAPIs = 0;
+    const totalAPIs = 4; // 현재가, 호가, 종목정보, 일봉차트
+    
+    // 1. 현재가 조회 (ka10001)
+    const priceParams = new URLSearchParams({ 'stk_cd': symbol });
+    const priceOptions = {
+      hostname: 'mockapi.kiwoom.com',
+      port: 443,
+      path: '/api/dostk/price',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': `Bearer ${token}`,
+        'api-id': 'ka10001'
+      }
+    };
+    
+    const priceReq = https.request(priceOptions, (response) => {
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          results.currentPrice = JSON.parse(data);
+          console.log(`✅ ${stockName} 현재가 조회 완료`);
+        } catch (e) {
+          console.log(`❌ ${stockName} 현재가 파싱 오류:`, e.message);
+        }
+        completedAPIs++;
+        if (completedAPIs === totalAPIs) resolve(results);
+      });
+    });
+    priceReq.on('error', () => { completedAPIs++; if (completedAPIs === totalAPIs) resolve(results); });
+    priceReq.write(JSON.stringify({ 'stk_cd': symbol }));
+    priceReq.end();
+    
+    // 2. 호가 조회 (ka10004)
     const bidAskOptions = {
       hostname: 'mockapi.kiwoom.com',
       port: 443,
@@ -174,8 +217,6 @@ async function getKiwoomStockData(token, symbol, stockName) {
       headers: {
         'Content-Type': 'application/json;charset=UTF-8',
         'authorization': `Bearer ${token}`,
-        'cont-yn': 'N',
-        'next-key': '',
         'api-id': 'ka10004'
       }
     };
@@ -185,57 +226,84 @@ async function getKiwoomStockData(token, symbol, stockName) {
       response.on('data', (chunk) => { data += chunk; });
       response.on('end', () => {
         try {
-          const result = JSON.parse(data);
-          console.log(`✅ ${stockName} 호가 데이터 수신 완료 (${response.statusCode})`);
-          
-          resolve({
-            symbol: symbol,
-            name: stockName,
-            bidAskData: result,
-            success: response.statusCode === 200 && result.return_code === 0
-          });
-          
+          results.bidAsk = JSON.parse(data);
+          console.log(`✅ ${stockName} 호가 조회 완료`);
         } catch (e) {
-          console.log(`❌ ${stockName} 데이터 파싱 오류:`, e.message);
-          resolve({
-            symbol: symbol,
-            name: stockName,
-            bidAskData: null,
-            success: false,
-            error: e.message
-          });
+          console.log(`❌ ${stockName} 호가 파싱 오류:`, e.message);
         }
+        completedAPIs++;
+        if (completedAPIs === totalAPIs) resolve(results);
       });
     });
-    
-    bidAskReq.on('error', (error) => {
-      console.log(`❌ ${stockName} 네트워크 오류:`, error.message);
-      resolve({
-        symbol: symbol,
-        name: stockName,
-        bidAskData: null,
-        success: false,
-        error: error.message
-      });
-    });
-    
-    bidAskReq.setTimeout(10000, () => {
-      console.log(`⏰ ${stockName} 요청 타임아웃`);
-      resolve({
-        symbol: symbol,
-        name: stockName,
-        bidAskData: null,
-        success: false,
-        error: '타임아웃'
-      });
-    });
-    
+    bidAskReq.on('error', () => { completedAPIs++; if (completedAPIs === totalAPIs) resolve(results); });
     bidAskReq.write(JSON.stringify({ 'stk_cd': symbol }));
     bidAskReq.end();
+    
+    // 3. 종목정보 조회 (ka10002)
+    const infoOptions = {
+      hostname: 'mockapi.kiwoom.com',
+      port: 443,
+      path: '/api/dostk/info',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': `Bearer ${token}`,
+        'api-id': 'ka10002'
+      }
+    };
+    
+    const infoReq = https.request(infoOptions, (response) => {
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          results.stockInfo = JSON.parse(data);
+          console.log(`✅ ${stockName} 종목정보 조회 완료`);
+        } catch (e) {
+          console.log(`❌ ${stockName} 종목정보 파싱 오류:`, e.message);
+        }
+        completedAPIs++;
+        if (completedAPIs === totalAPIs) resolve(results);
+      });
+    });
+    infoReq.on('error', () => { completedAPIs++; if (completedAPIs === totalAPIs) resolve(results); });
+    infoReq.write(JSON.stringify({ 'stk_cd': symbol }));
+    infoReq.end();
+    
+    // 4. 일봉차트 조회 (ka10101)
+    const chartOptions = {
+      hostname: 'mockapi.kiwoom.com',
+      port: 443,
+      path: '/api/dostk/chart',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': `Bearer ${token}`,
+        'api-id': 'ka10101'
+      }
+    };
+    
+    const chartReq = https.request(chartOptions, (response) => {
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          results.dailyChart = JSON.parse(data);
+          console.log(`✅ ${stockName} 일봉차트 조회 완료`);
+        } catch (e) {
+          console.log(`❌ ${stockName} 일봉차트 파싱 오류:`, e.message);
+        }
+        completedAPIs++;
+        if (completedAPIs === totalAPIs) resolve(results);
+      });
+    });
+    chartReq.on('error', () => { completedAPIs++; if (completedAPIs === totalAPIs) resolve(results); });
+    chartReq.write(JSON.stringify({ 'stk_cd': symbol, 'period': 'D', 'cnt': 30 }));
+    chartReq.end();
   });
 }
 
-// 토큰으로 실제 주식 데이터 요청 (호가 데이터 기반)
+// 토큰으로 실제 주식 데이터 요청 (다중 API 통합)
 async function getStockDataWithToken(token) {
   return new Promise(async (resolve, reject) => {
     // 삼성전자, SK하이닉스, NAVER 주식 데이터 요청
@@ -243,40 +311,42 @@ async function getStockDataWithToken(token) {
     const stockNames = ['삼성전자', 'SK하이닉스', 'NAVER'];
     const stockResults = [];
     
-    console.log(`🚀 ${stockSymbols.length}개 종목의 호가 데이터 조회 시작...`);
+    console.log(`🚀 ${stockSymbols.length}개 종목의 종합 데이터 조회 시작...`);
     
     try {
-      // 각 종목별로 호가 데이터 조회
+      // 각 종목별로 다중 API 호출
       for (let i = 0; i < stockSymbols.length; i++) {
-        const stockData = await getKiwoomStockData(token, stockSymbols[i], stockNames[i]);
+        console.log(`📊 ${stockNames[i]} (${stockSymbols[i]}) 데이터 수집 중...`);
         
-        // 호가 데이터를 주식 카드 형식으로 변환
-        const cardData = convertBidAskToStockCard(stockData, i + 1);
-        stockResults.push(cardData);
+        const multiApiResult = await callMultipleKiwoomAPIs(token, stockSymbols[i], stockNames[i]);
         
-        console.log(`✅ ${stockNames[i]} 카드 데이터 생성 완료`);
+        // 수집된 데이터를 통합해서 최종 결과 생성
+        const integratedData = integrateStockData(multiApiResult, i + 1);
+        stockResults.push(integratedData);
+        
+        console.log(`✅ ${stockNames[i]} 데이터 통합 완료`);
       }
       
       resolve({
         success: true,
         data: stockResults,
-        message: `키움 API 호가 기반 주식 데이터 (${stockResults.length}개 종목)`,
+        message: `키움 API 종합 주식 데이터 (${stockResults.length}개 종목)`,
         lastUpdate: new Date().toISOString()
       });
       
     } catch (error) {
-      console.error('❌ 호가 데이터 조회 오류:', error);
+      console.error('❌ 다중 API 호출 오류:', error);
       reject(error);
     }
   });
 }
 
-// 호가 데이터를 주식 카드 형식으로 변환하는 함수
-function convertBidAskToStockCard(stockData, id) {
-  const { symbol, name, bidAskData, success, error } = stockData;
+// 다중 API 결과를 통합하는 함수
+function integrateStockData(multiApiResult, id) {
+  const { symbol, name, currentPrice, bidAsk, stockInfo, dailyChart } = multiApiResult;
   
   // 기본 구조
-  let cardData = {
+  let integratedData = {
     id: id,
     symbol: symbol,
     name: name,
@@ -285,54 +355,66 @@ function convertBidAskToStockCard(stockData, id) {
     changePercent: '0%',
     volume: 0,
     timestamp: new Date().toISOString(),
-    bidAskInfo: null,
-    rawData: bidAskData
+    rawData: {
+      currentPrice: currentPrice,
+      bidAsk: bidAsk,
+      stockInfo: stockInfo,
+      dailyChart: dailyChart
+    }
   };
   
-  if (!success || !bidAskData || bidAskData.return_code !== 0) {
-    cardData.error = error || '데이터 조회 실패';
-    console.log(`❌ ${name} 호가 데이터 변환 실패:`, cardData.error);
-    return cardData;
-  }
-  
   try {
-    // 호가 데이터에서 현재가 정보 추출
-    const buyPrice = parseInt(bidAskData.buy_fpr_bid?.replace(/[+-]/g, '')) || 0;
-    const sellPrice = parseInt(bidAskData.sel_fpr_bid?.replace(/[+-]/g, '')) || 0;
-    
-    // 매수 우선호가와 매도 우선호가의 중간값을 현재가로 사용
-    const estimatedPrice = buyPrice > 0 && sellPrice > 0 ? Math.round((buyPrice + sellPrice) / 2) : (buyPrice || sellPrice || 0);
-    
-    cardData.price = estimatedPrice;
-    cardData.volume = (parseInt(bidAskData.tot_buy_req) || 0) + (parseInt(bidAskData.tot_sel_req) || 0);
-    
-    // 호가 정보 추가
-    cardData.bidAskInfo = {
-      buyPrice: buyPrice,
-      sellPrice: sellPrice,
-      buyVolume: parseInt(bidAskData.buy_fpr_req) || 0,
-      sellVolume: parseInt(bidAskData.sel_fpr_req) || 0,
-      totalBuyVolume: parseInt(bidAskData.tot_buy_req) || 0,
-      totalSellVolume: parseInt(bidAskData.tot_sel_req) || 0,
-      bidTime: bidAskData.bid_req_base_tm || "000000"
-    };
-    
-    // 매수/매도 호가 차이로 변동성 추정
-    if (buyPrice > 0 && sellPrice > 0) {
-      const spread = sellPrice - buyPrice;
-      const spreadPercent = ((spread / buyPrice) * 100).toFixed(2);
-      cardData.changePercent = `${spreadPercent}%`;
-      cardData.change = spread;
+    // 현재가 데이터에서 기본 정보 추출
+    if (currentPrice && currentPrice.return_code === 0) {
+      // 키움 API 응답 구조에 맞게 데이터 파싱
+      if (currentPrice.output) {
+        const output = currentPrice.output;
+        integratedData.price = parseInt(output.stck_prpr) || 0;
+        integratedData.change = parseInt(output.prdy_vrss) || 0;
+        integratedData.changePercent = (parseFloat(output.prdy_ctrt) || 0) + '%';
+        integratedData.volume = parseInt(output.acml_vol) || 0;
+      }
     }
     
-    console.log(`📈 ${name} 호가 기반 데이터: 추정가 ${estimatedPrice}원, 매수호가 ${buyPrice}원, 매도호가 ${sellPrice}원`);
+    // 호가 데이터에서 추가 정보 추출
+    if (bidAsk && bidAsk.return_code === 0) {
+      integratedData.bidAskData = {
+        buyPrice: bidAsk.buy_fpr_bid || "0",
+        sellPrice: bidAsk.sel_fpr_bid || "0",
+        buyVolume: parseInt(bidAsk.buy_fpr_req) || 0,
+        sellVolume: parseInt(bidAsk.sel_fpr_req) || 0
+      };
+    }
     
-  } catch (parseError) {
-    console.error(`❌ ${name} 호가 데이터 파싱 중 오류:`, parseError.message);
-    cardData.error = `호가 데이터 파싱 오류: ${parseError.message}`;
+    // 종목 정보에서 기업 정보 추가
+    if (stockInfo && stockInfo.return_code === 0) {
+      integratedData.companyInfo = {
+        marketCap: stockInfo.market_cap || "정보없음",
+        sector: stockInfo.sector || "정보없음",
+        industry: stockInfo.industry || "정보없음"
+      };
+    }
+    
+    // 일봉 차트에서 최근 동향 정보 추가
+    if (dailyChart && dailyChart.return_code === 0 && dailyChart.output && dailyChart.output.length > 0) {
+      const recentData = dailyChart.output[0]; // 가장 최근 데이터
+      integratedData.recentTrend = {
+        openPrice: parseInt(recentData.stck_oprc) || 0,
+        highPrice: parseInt(recentData.stck_hgpr) || 0,
+        lowPrice: parseInt(recentData.stck_lwpr) || 0,
+        closePrice: parseInt(recentData.stck_clpr) || 0,
+        tradingVolume: parseInt(recentData.acml_vol) || 0
+      };
+    }
+    
+    console.log(`📈 ${name} 통합 데이터: 가격 ${integratedData.price}원, 변동 ${integratedData.changePercent}`);
+    
+  } catch (error) {
+    console.error(`❌ ${name} 데이터 통합 중 오류:`, error.message);
+    integratedData.error = `데이터 통합 오류: ${error.message}`;
   }
   
-  return cardData;
+  return integratedData;
 }
 
 server.listen(3000, () => {

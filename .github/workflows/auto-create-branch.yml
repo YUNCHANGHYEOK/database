@@ -1,0 +1,62 @@
+name: 🌿 Auto Create Branch from Issue
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  create-branch:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'enhancement') || contains(github.event.issue.labels.*.name, 'bug')
+    
+    steps:
+      - name: 🛎️ Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 🌿 Create branch from issue
+        run: |
+          # 이슈 번호 추출
+          ISSUE_NUMBER=${{ github.event.issue.number }}
+          
+          # 이슈 타입 확인
+          if [[ "${{ contains(github.event.issue.labels.*.name, 'enhancement') }}" == "true" ]]; then
+            BRANCH_PREFIX="feat"
+          elif [[ "${{ contains(github.event.issue.labels.*.name, 'bug') }}" == "true" ]]; then
+            BRANCH_PREFIX="fix"
+          else
+            BRANCH_PREFIX="feat"
+          fi
+          
+          # 브랜치 이름 생성
+          BRANCH_NAME="${BRANCH_PREFIX}/${ISSUE_NUMBER}"
+          
+          # 브랜치 생성 및 푸시
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git checkout -b $BRANCH_NAME
+          
+          # README에 브랜치 정보 추가 (선택사항)
+          echo "🌿 Branch $BRANCH_NAME created for issue #$ISSUE_NUMBER" >> .github/branch-log.md
+          
+          git add .github/branch-log.md
+          git commit -m "🌿 Create branch $BRANCH_NAME for issue #$ISSUE_NUMBER" || echo "No changes to commit"
+          
+          git push origin $BRANCH_NAME
+          
+      - name: 📝 Comment on issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = context.issue.number;
+            const branchPrefix = context.payload.issue.labels.some(label => label.name === 'enhancement') ? 'feat' : 'fix';
+            const branchName = `${branchPrefix}/${issueNumber}`;
+            
+            github.rest.issues.createComment({
+              issue_number: issueNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🌿 브랜치가 자동으로 생성되었습니다: \`${branchName}\`\n\n### 다음 단계:\n1. 로컬에서 브랜치를 체크아웃하세요:\n   \`\`\`bash\n   git fetch origin\n   git checkout ${branchName}\n   \`\`\`\n\n2. 작업을 완료한 후 PR을 생성해주세요.\n3. PR 제목에 \`Closes #${issueNumber}\`를 포함해주세요.\n\nHappy coding! 🚀`
+            });
