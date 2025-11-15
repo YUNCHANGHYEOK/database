@@ -3,74 +3,11 @@ description: 버그 신고
 title: "[BUG] "
 labels: ["bug"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        버그를 신고해주셔서 감사합니다! 🐛
-        
   - type: textarea
     id: description
     attributes:
-      label: 📋 Bug Description (버그 설명)
-      description: 발생한 버그에 대해 자세히 설명해주세요.
-      placeholder: 예) 주가 데이터가 로드되지 않습니다.
+      label: 📋 Bug Description
+      description: 발생한 버그에 대해 설명해주세요.
+      placeholder: 어떤 버그가 발생했나요?
     validations:
       required: true
-      
-  - type: textarea
-    id: steps
-    attributes:
-      label: 🔄 Steps to Reproduce (재현 단계)
-      description: 버그를 재현하는 단계를 순서대로 작성해주세요.
-      placeholder: |
-        1. 웹사이트에 접속한다
-        2. 새로고침 버튼을 클릭한다
-        3. 오류가 발생한다
-      value: |
-        1. 
-        2. 
-        3. 
-    validations:
-      required: true
-      
-  - type: textarea
-    id: expected
-    attributes:
-      label: ✅ Expected Behavior (예상 동작)
-      description: 어떻게 동작해야 하나요?
-      placeholder: 예) 주가 데이터가 정상적으로 표시되어야 합니다.
-    validations:
-      required: true
-      
-  - type: textarea
-    id: actual
-    attributes:
-      label: ❌ Actual Behavior (실제 동작)
-      description: 실제로는 어떻게 동작하나요?
-      placeholder: 예) "데이터 로드 실패" 오류 메시지가 표시됩니다.
-    validations:
-      required: true
-      
-  - type: textarea
-    id: environment
-    attributes:
-      label: 🖥️ Environment (환경)
-      description: 사용 중인 환경 정보를 작성해주세요.
-      placeholder: |
-        - OS: Windows 11
-        - Browser: Chrome 120.0
-        - Node.js: v18.0.0
-      value: |
-        - OS: 
-        - Browser: 
-        - Node.js: 
-    validations:
-      required: false
-      
-  - type: textarea
-    id: additional
-    attributes:
-      label: 📝 Additional Context (추가 정보)
-      description: 추가로 전달하고 싶은 정보나 스크린샷이 있다면 첨부해주세요.
-    validations:
-      required: false

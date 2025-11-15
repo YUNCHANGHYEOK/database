@@ -57,7 +57,15 @@ jobs:
         with:
           script: |
             const issueNumber = context.issue.number;
-            const branchPrefix = context.payload.issue.labels.some(label => label.name === 'feature') ? 'feat' : 'fix';
+            const labels = context.payload.issue.labels.map(label => label.name);
+            let branchPrefix = 'feat'; // 기본값
+            
+            if (labels.includes('feature')) {
+              branchPrefix = 'feat';
+            } else if (labels.includes('bug')) {
+              branchPrefix = 'fix';
+            }
+            
             const branchName = `${branchPrefix}/${issueNumber}`;
             
             github.rest.issues.createComment({
