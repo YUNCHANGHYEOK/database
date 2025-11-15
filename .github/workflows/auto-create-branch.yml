@@ -7,7 +7,7 @@ on:
 jobs:
   create-branch:
     runs-on: ubuntu-latest
-    if: contains(github.event.issue.labels.*.name, 'enhancement') || contains(github.event.issue.labels.*.name, 'bug')
+    if: github.event.action == 'opened' || github.event.action == 'labeled'
     
     steps:
       - name: 🛎️ Checkout repository
@@ -21,7 +21,7 @@ jobs:
           ISSUE_NUMBER=${{ github.event.issue.number }}
           
           # 이슈 타입 확인
-          if [[ "${{ contains(github.event.issue.labels.*.name, 'enhancement') }}" == "true" ]]; then
+          if [[ "${{ contains(github.event.issue.labels.*.name, 'feature') }}" == "true" ]]; then
             BRANCH_PREFIX="feat"
           elif [[ "${{ contains(github.event.issue.labels.*.name, 'bug') }}" == "true" ]]; then
             BRANCH_PREFIX="fix"
@@ -51,7 +51,7 @@ jobs:
         with:
           script: |
             const issueNumber = context.issue.number;
-            const branchPrefix = context.payload.issue.labels.some(label => label.name === 'enhancement') ? 'feat' : 'fix';
+            const branchPrefix = context.payload.issue.labels.some(label => label.name === 'feature') ? 'feat' : 'fix';
             const branchName = `${branchPrefix}/${issueNumber}`;
             
             github.rest.issues.createComment({
