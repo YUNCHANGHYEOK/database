@@ -5,3 +5,4 @@
 ## 브랜치 생성 기록
 
 - 🌿 Branch feat/9 created for issue #9 (자동화 test/1) - 2025-11-15
+🌿 Branch feat/17 created for issue #17 - Sat Nov 15 12:42:27 UTC 2025
