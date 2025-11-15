@@ -5,6 +5,18 @@ const { exec } = require("child_process");
 const url = require("url");
 
 const server = http.createServer((req, res) => {
+  // CORS 헤더를 모든 응답에 추가
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // OPTIONS 요청 처리 (CORS preflight)
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+  
   const parsedUrl = url.parse(req.url, true);
   let filePath = path.join(__dirname, "../front");
   
@@ -48,18 +60,7 @@ const server = http.createServer((req, res) => {
 
 // 키움 API 호출 함수 (실제 API만 사용)
 function handleStocksAPI(req, res) {
-  console.log("키움 API 호출 중...");
-  
-  // CORS 헤더 설정
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  if (req.method === 'OPTIONS') {
-    res.writeHead(200);
-    res.end();
-    return;
-  }
+  console.log("📊 키움 API 호출 요청 받음...");
   
   // 키움 API 직접 호출 (Node.js)
   callKiwoomAPI()
@@ -131,7 +132,7 @@ async function callKiwoomAPI() {
             const token = apiResponse.token || apiResponse.access_token;
             console.log('키움 API 토큰 획득 성공:', token.substring(0, 20) + '...');
             
-            // 실제 주식 데이터 요청
+            // 실제 주식 데이터 요청 (ka10001 사용)
             getStockDataWithToken(token)
               .then(stockData => resolve(stockData))
               .catch(error => reject(error));
@@ -159,262 +160,120 @@ async function callKiwoomAPI() {
   });
 }
 
-// 키움 API 다중 데이터 요청 함수
-async function callMultipleKiwoomAPIs(token, symbol, stockName) {
+// 토큰으로 실제 주식 데이터 요청 (ka10001만 사용)
+async function getStockDataWithToken(token) {
   const https = require('https');
   
-  return new Promise((resolve) => {
-    const results = {
-      symbol: symbol,
-      name: stockName,
-      currentPrice: null,
-      bidAsk: null,
-      stockInfo: null,
-      dailyChart: null
-    };
-    
-    let completedAPIs = 0;
-    const totalAPIs = 4; // 현재가, 호가, 종목정보, 일봉차트
-    
-    // 1. 현재가 조회 (ka10001)
-    const priceParams = new URLSearchParams({ 'stk_cd': symbol });
-    const priceOptions = {
-      hostname: 'mockapi.kiwoom.com',
-      port: 443,
-      path: '/api/dostk/price',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        'authorization': `Bearer ${token}`,
-        'api-id': 'ka10001'
-      }
-    };
-    
-    const priceReq = https.request(priceOptions, (response) => {
-      let data = '';
-      response.on('data', (chunk) => { data += chunk; });
-      response.on('end', () => {
-        try {
-          results.currentPrice = JSON.parse(data);
-          console.log(`✅ ${stockName} 현재가 조회 완료`);
-        } catch (e) {
-          console.log(`❌ ${stockName} 현재가 파싱 오류:`, e.message);
-        }
-        completedAPIs++;
-        if (completedAPIs === totalAPIs) resolve(results);
-      });
-    });
-    priceReq.on('error', () => { completedAPIs++; if (completedAPIs === totalAPIs) resolve(results); });
-    priceReq.write(JSON.stringify({ 'stk_cd': symbol }));
-    priceReq.end();
-    
-    // 2. 호가 조회 (ka10004)
-    const bidAskOptions = {
-      hostname: 'mockapi.kiwoom.com',
-      port: 443,
-      path: '/api/dostk/mrkcond',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        'authorization': `Bearer ${token}`,
-        'api-id': 'ka10004'
-      }
-    };
-    
-    const bidAskReq = https.request(bidAskOptions, (response) => {
-      let data = '';
-      response.on('data', (chunk) => { data += chunk; });
-      response.on('end', () => {
-        try {
-          results.bidAsk = JSON.parse(data);
-          console.log(`✅ ${stockName} 호가 조회 완료`);
-        } catch (e) {
-          console.log(`❌ ${stockName} 호가 파싱 오류:`, e.message);
-        }
-        completedAPIs++;
-        if (completedAPIs === totalAPIs) resolve(results);
-      });
-    });
-    bidAskReq.on('error', () => { completedAPIs++; if (completedAPIs === totalAPIs) resolve(results); });
-    bidAskReq.write(JSON.stringify({ 'stk_cd': symbol }));
-    bidAskReq.end();
-    
-    // 3. 종목정보 조회 (ka10002)
-    const infoOptions = {
-      hostname: 'mockapi.kiwoom.com',
-      port: 443,
-      path: '/api/dostk/info',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        'authorization': `Bearer ${token}`,
-        'api-id': 'ka10002'
-      }
-    };
-    
-    const infoReq = https.request(infoOptions, (response) => {
-      let data = '';
-      response.on('data', (chunk) => { data += chunk; });
-      response.on('end', () => {
-        try {
-          results.stockInfo = JSON.parse(data);
-          console.log(`✅ ${stockName} 종목정보 조회 완료`);
-        } catch (e) {
-          console.log(`❌ ${stockName} 종목정보 파싱 오류:`, e.message);
-        }
-        completedAPIs++;
-        if (completedAPIs === totalAPIs) resolve(results);
-      });
-    });
-    infoReq.on('error', () => { completedAPIs++; if (completedAPIs === totalAPIs) resolve(results); });
-    infoReq.write(JSON.stringify({ 'stk_cd': symbol }));
-    infoReq.end();
-    
-    // 4. 일봉차트 조회 (ka10101)
-    const chartOptions = {
-      hostname: 'mockapi.kiwoom.com',
-      port: 443,
-      path: '/api/dostk/chart',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        'authorization': `Bearer ${token}`,
-        'api-id': 'ka10101'
-      }
-    };
-    
-    const chartReq = https.request(chartOptions, (response) => {
-      let data = '';
-      response.on('data', (chunk) => { data += chunk; });
-      response.on('end', () => {
-        try {
-          results.dailyChart = JSON.parse(data);
-          console.log(`✅ ${stockName} 일봉차트 조회 완료`);
-        } catch (e) {
-          console.log(`❌ ${stockName} 일봉차트 파싱 오류:`, e.message);
-        }
-        completedAPIs++;
-        if (completedAPIs === totalAPIs) resolve(results);
-      });
-    });
-    chartReq.on('error', () => { completedAPIs++; if (completedAPIs === totalAPIs) resolve(results); });
-    chartReq.write(JSON.stringify({ 'stk_cd': symbol, 'period': 'D', 'cnt': 30 }));
-    chartReq.end();
-  });
-}
-
-// 토큰으로 실제 주식 데이터 요청 (다중 API 통합)
-async function getStockDataWithToken(token) {
   return new Promise(async (resolve, reject) => {
     // 삼성전자, SK하이닉스, NAVER 주식 데이터 요청
-    const stockSymbols = ['005930', '000660', '035420']; // 삼성전자, SK하이닉스, NAVER
+    const stockSymbols = ['005930', '000660', '035420'];
     const stockNames = ['삼성전자', 'SK하이닉스', 'NAVER'];
     const stockResults = [];
     
-    console.log(`🚀 ${stockSymbols.length}개 종목의 종합 데이터 조회 시작...`);
+    console.log(`🚀 ${stockSymbols.length}개 종목의 ka10001 데이터 조회 시작...`);
     
     try {
-      // 각 종목별로 다중 API 호출
+      // 각 종목별로 ka10001만 호출 (API 호출 제한을 피하기 위해 지연 추가)
       for (let i = 0; i < stockSymbols.length; i++) {
-        console.log(`📊 ${stockNames[i]} (${stockSymbols[i]}) 데이터 수집 중...`);
+        console.log(`📊 ${stockNames[i]} (${stockSymbols[i]}) ka10001 호출 중...`);
         
-        const multiApiResult = await callMultipleKiwoomAPIs(token, stockSymbols[i], stockNames[i]);
+        const stockData = await callKa10001(token, stockSymbols[i], stockNames[i]);
+        stockResults.push(stockData);
         
-        // 수집된 데이터를 통합해서 최종 결과 생성
-        const integratedData = integrateStockData(multiApiResult, i + 1);
-        stockResults.push(integratedData);
+        console.log(`✅ ${stockNames[i]} 데이터 완료: ${stockData.price}원 (${stockData.changePercent})`);
         
-        console.log(`✅ ${stockNames[i]} 데이터 통합 완료`);
+        // API 호출 제한을 피하기 위해 1초 대기 (마지막 종목은 대기 안 함)
+        if (i < stockSymbols.length - 1) {
+          console.log(`⏳ API 호출 제한 회피를 위해 1초 대기 중...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
       
-      resolve({
-        success: true,
-        data: stockResults,
-        message: `키움 API 종합 주식 데이터 (${stockResults.length}개 종목)`,
-        lastUpdate: new Date().toISOString()
-      });
+      // 배열 형태로 직접 반환
+      resolve(stockResults);
       
     } catch (error) {
-      console.error('❌ 다중 API 호출 오류:', error);
+      console.error('❌ ka10001 호출 오류:', error);
       reject(error);
     }
   });
 }
 
-// 다중 API 결과를 통합하는 함수
-function integrateStockData(multiApiResult, id) {
-  const { symbol, name, currentPrice, bidAsk, stockInfo, dailyChart } = multiApiResult;
+// ka10001 (주식현재가/기본정보) API 호출
+function callKa10001(token, symbol, name) {
+  const https = require('https');
   
-  // 기본 구조
-  let integratedData = {
-    id: id,
-    symbol: symbol,
-    name: name,
-    price: 0,
-    change: 0,
-    changePercent: '0%',
-    volume: 0,
-    timestamp: new Date().toISOString(),
-    rawData: {
-      currentPrice: currentPrice,
-      bidAsk: bidAsk,
-      stockInfo: stockInfo,
-      dailyChart: dailyChart
-    }
-  };
-  
-  try {
-    // 현재가 데이터에서 기본 정보 추출
-    if (currentPrice && currentPrice.return_code === 0) {
-      // 키움 API 응답 구조에 맞게 데이터 파싱
-      if (currentPrice.output) {
-        const output = currentPrice.output;
-        integratedData.price = parseInt(output.stck_prpr) || 0;
-        integratedData.change = parseInt(output.prdy_vrss) || 0;
-        integratedData.changePercent = (parseFloat(output.prdy_ctrt) || 0) + '%';
-        integratedData.volume = parseInt(output.acml_vol) || 0;
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'mockapi.kiwoom.com',
+      port: 443,
+      path: '/api/dostk/stkinfo',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': `Bearer ${token}`,
+        'cont-yn': 'N',
+        'next-key': '',
+        'api-id': 'ka10001'
       }
-    }
+    };
     
-    // 호가 데이터에서 추가 정보 추출
-    if (bidAsk && bidAsk.return_code === 0) {
-      integratedData.bidAskData = {
-        buyPrice: bidAsk.buy_fpr_bid || "0",
-        sellPrice: bidAsk.sel_fpr_bid || "0",
-        buyVolume: parseInt(bidAsk.buy_fpr_req) || 0,
-        sellVolume: parseInt(bidAsk.sel_fpr_req) || 0
-      };
-    }
+    const req = https.request(options, (response) => {
+      let data = '';
+      
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      response.on('end', () => {
+        try {
+          const apiResult = JSON.parse(data);
+          
+          if (apiResult.return_code === 0) {
+            // 성공 - 데이터 가공
+            const result = {
+              symbol: symbol,
+              name: apiResult.stk_nm || name,
+              price: Math.abs(parseInt(apiResult.cur_prc || 0)),
+              change: parseInt(apiResult.pred_pre || 0),
+              changePercent: apiResult.flu_rt || '0',
+              volume: parseInt(apiResult.trde_qty || 0),
+              openPrice: Math.abs(parseInt(apiResult.open_pric || 0)),
+              highPrice: Math.abs(parseInt(apiResult.high_pric || 0)),
+              lowPrice: Math.abs(parseInt(apiResult.low_pric || 0)),
+              timestamp: new Date().toISOString()
+            };
+            resolve(result);
+          } else {
+            // API 오류
+            console.log(`❌ ${name} ka10001 실패:`, apiResult.return_msg);
+            resolve({
+              symbol: symbol,
+              name: name,
+              price: 0,
+              change: 0,
+              changePercent: '0',
+              volume: 0,
+              error: apiResult.return_msg
+            });
+          }
+        } catch (parseError) {
+          reject(new Error(`${name} 데이터 파싱 실패: ${parseError.message}`));
+        }
+      });
+    });
     
-    // 종목 정보에서 기업 정보 추가
-    if (stockInfo && stockInfo.return_code === 0) {
-      integratedData.companyInfo = {
-        marketCap: stockInfo.market_cap || "정보없음",
-        sector: stockInfo.sector || "정보없음",
-        industry: stockInfo.industry || "정보없음"
-      };
-    }
+    req.on('error', (error) => {
+      reject(new Error(`${name} 네트워크 오류: ${error.message}`));
+    });
     
-    // 일봉 차트에서 최근 동향 정보 추가
-    if (dailyChart && dailyChart.return_code === 0 && dailyChart.output && dailyChart.output.length > 0) {
-      const recentData = dailyChart.output[0]; // 가장 최근 데이터
-      integratedData.recentTrend = {
-        openPrice: parseInt(recentData.stck_oprc) || 0,
-        highPrice: parseInt(recentData.stck_hgpr) || 0,
-        lowPrice: parseInt(recentData.stck_lwpr) || 0,
-        closePrice: parseInt(recentData.stck_clpr) || 0,
-        tradingVolume: parseInt(recentData.acml_vol) || 0
-      };
-    }
+    req.setTimeout(5000, () => {
+      reject(new Error(`${name} 요청 타임아웃`));
+    });
     
-    console.log(`📈 ${name} 통합 데이터: 가격 ${integratedData.price}원, 변동 ${integratedData.changePercent}`);
-    
-  } catch (error) {
-    console.error(`❌ ${name} 데이터 통합 중 오류:`, error.message);
-    integratedData.error = `데이터 통합 오류: ${error.message}`;
-  }
-  
-  return integratedData;
+    req.write(JSON.stringify({ 'stk_cd': symbol }));
+    req.end();
+  });
 }
 
 server.listen(3000, () => {
