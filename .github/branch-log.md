@@ -6,3 +6,4 @@
 
 - 🌿 Branch feat/9 created for issue #9 (자동화 test/1) - 2025-11-15
 🌿 Branch feat/17 created for issue #17 - Sat Nov 15 12:42:27 UTC 2025
+🌿 Branch feat/20 created for issue #20 - Sun Nov 16 05:39:20 UTC 2025
