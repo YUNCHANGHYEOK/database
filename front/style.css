@@ -214,3 +214,31 @@ footer {
 .loading {
     animation: pulse 1.5s infinite;
 }
+
+/* 차트 섹션 스타일 */
+.chart-section {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 3rem;
+}
+
+.chart-section h2 {
+    color: #2c3e50;
+    text-shadow: none;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.chart-container canvas {
+    max-height: 400px;
+}

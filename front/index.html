@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📊 주식 데이터 분석</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <header>
@@ -34,6 +35,13 @@
                     <p class="price">₩195,000</p>
                     <p class="change positive">+5,000 (+2.63%)</p>
                 </div>
+            </div>
+        </section>
+
+        <section class="chart-section">
+            <h2>📈 삼성전자 720일 일봉 차트</h2>
+            <div class="chart-container">
+                <canvas id="stockChart"></canvas>
             </div>
         </section>
 

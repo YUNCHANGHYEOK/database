@@ -7,7 +7,7 @@
 ```
 database_project/
 ├── back/                   # 백엔드 (Python)
-│   ├── app.py             # Flask 웹 서버
+│   ├── app.js             # Node.js 웹 서버
 │   ├── api.py             # 키움증권 API 연동
 │   ├── kiwoom_test.py     # API 환경 테스트
 │   ├── test.ipynb         # 데이터 분석 노트북
@@ -34,13 +34,13 @@ database_project/
 - **데이터 분석**: pandas, numpy 기반 주식 데이터 처리
 
 ### 🔄 개발 중
-- **Flask API 서버**: RESTful API 구축
+- **Node.js 서버**: RESTful API 구축
 - **React 프론트엔드**: 사용자 인터페이스 개발
 
 ## 🛠️ 기술 스택
 
 ### 백엔드 (Python)
-- Flask, pandas, numpy, yfinance
+- Node.js, requests, python-dotenv
 - PyKiwoom (키움증권 API)
 - OpenCV (차트 생성)
 
@@ -70,7 +70,7 @@ npm run dev
 - [x] 데이터 수집 및 처리 파이프라인
 - [x] OpenCV 차트 생성 기능
 - [x] 프로젝트 구조 정리 (back/front 분리)
-- [ ] Flask API 서버 구축
+- [ ] Node.js API 서버 확장
 - [ ] React 프론트엔드 개발
 - [ ] 실시간 데이터 스트리밍
 - [ ] 사용자 인증 시스템

@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         console.log('📊 페이지 로드 후 키움 API 데이터 자동 로딩...');
         refreshData();
+        loadStockChart('005930'); // 삼성전자 차트 로드
     }, 1000);
     
     console.log('📊 주식 데이터 분석 웹사이트가 로드되었습니다!');
@@ -32,7 +33,7 @@ function updateTime() {
     }
 }
 
-// 데이터 새로고침 함수 (Flask 서버를 통한 키움 API 호출)
+// 데이터 새로고침 함수 (키움 API 호출)
 function refreshData() {
     const button = document.querySelector('.cta-button');
     const stockCards = document.querySelectorAll('.stock-card');
@@ -237,6 +238,201 @@ function showNotification(message, type = 'success') {
             }
         }, 300);
     }, 3000);
+}
+
+// 차트 관련 변수
+let stockChartInstance = null;
+
+// 주식 차트 로드 함수
+function loadStockChart(symbol) {
+    console.log(`📈 ${symbol} 차트 데이터 로딩 중...`);
+    
+    fetch(`http://localhost:3000/api/chart/${symbol}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(result => {
+            console.log('📈 차트 데이터 응답:', result);
+            console.log('📈 result.success:', result.success);
+            console.log('📈 result.data:', result.data);
+            
+            if (result.success && result.data && Array.isArray(result.data)) {
+                renderStockChart(result.data, symbol);
+                console.log('✅ 차트 렌더링 완료');
+            } else {
+                console.error('❌ 차트 데이터 형식 오류:', result);
+                throw new Error(result.error || '차트 데이터가 없거나 형식이 잘못되었습니다');
+            }
+        })
+        .catch(error => {
+            console.error('❌ 차트 로딩 오류:', error);
+            showNotification('❌ 차트 로딩 실패: ' + error.message, 'error');
+        });
+}
+
+// 차트 렌더링 함수
+function renderStockChart(chartData, symbol) {
+    const ctx = document.getElementById('stockChart');
+    
+    if (!ctx) {
+        console.error('차트 캔버스를 찾을 수 없습니다');
+        return;
+    }
+    
+    // 기존 차트가 있으면 제거
+    if (stockChartInstance) {
+        stockChartInstance.destroy();
+    }
+    
+    // 일봉 데이터만 추출 (8자리 날짜 또는 장 마감 시간)
+    const dailyData = chartData.filter(item => {
+        const timeStr = item.date;
+        // 8자리면 일봉 데이터
+        if (timeStr.length === 8) {
+            return true;
+        }
+        // 14자리 분봉 데이터면 장 마감 시간만
+        if (timeStr.length === 14) {
+            const time = timeStr.slice(8, 12); // HHMM
+            return time === '1530';
+        }
+        return false;
+    });
+    
+    // 날짜별로 하나만 남기기 (중복 제거)
+    const uniqueDailyData = [];
+    const seenDates = new Set();
+    
+    for (const item of dailyData) {
+        const dateKey = item.date.slice(0, 8); // YYYYMMDD
+        if (!seenDates.has(dateKey)) {
+            seenDates.add(dateKey);
+            uniqueDailyData.push(item);
+        }
+    }
+    
+    // 최대 720개 (720일 = 약 2년)
+    const limitedData = uniqueDailyData.slice(-720);
+    
+    // 데이터를 날짜 오름차순으로 정렬 (오래된 것부터)
+    const sortedData = [...limitedData].reverse();
+    
+    // 날짜와 종가 데이터 추출
+    const labels = sortedData.map(item => {
+        const dateStr = item.date;
+        // 분봉 데이터 (14자리): YYYYMMDDHHMMSS
+        if (dateStr.length === 14) {
+            return `${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
+        }
+        // 일봉 데이터 (8자리): YYYYMMDD
+        return `${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
+    });
+    
+    const closePrices = sortedData.map(item => item.close);
+    
+    // 가격 변동 확인 (상승/하락 색상)
+    const borderColor = closePrices[closePrices.length - 1] > closePrices[0] 
+        ? 'rgb(255, 99, 132)'  // 하락 - 빨강
+        : 'rgb(75, 192, 192)'; // 상승 - 초록
+    
+    const backgroundColor = closePrices[closePrices.length - 1] > closePrices[0]
+        ? 'rgba(255, 99, 132, 0.1)'
+        : 'rgba(75, 192, 192, 0.1)';
+    
+    // Chart.js로 라인 차트 생성
+    stockChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '종가 (원)',
+                data: closePrices,
+                borderColor: borderColor,
+                backgroundColor: backgroundColor,
+                tension: 0.3,
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        font: {
+                            size: 14
+                        }
+                    }
+                },
+                title: {
+                    display: true,
+                    text: `삼성전자 (${symbol}) - 최근 720일 일봉 차트`,
+                    font: {
+                        size: 18,
+                        weight: 'bold'
+                    },
+                    padding: 20
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: {
+                        size: 14
+                    },
+                    bodyFont: {
+                        size: 13
+                    },
+                    callbacks: {
+                        label: function(context) {
+                            return '종가: ' + context.parsed.y.toLocaleString() + '원';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    ticks: {
+                        font: {
+                            size: 12
+                        },
+                        callback: function(value) {
+                            return value.toLocaleString() + '원';
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        font: {
+                            size: 11
+                        },
+                        maxRotation: 0,
+                        minRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 30
+                    }
+                }
+            }
+        }
+    });
 }
 
 // 키보드 단축키
