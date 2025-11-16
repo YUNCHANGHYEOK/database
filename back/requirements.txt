@@ -1,9 +1,5 @@
 # 백엔드 Python 의존성 목록
 
-# 웹 프레임워크
-flask==3.0.0
-flask-cors==4.0.0
-
 # 데이터 처리 및 분석
 pandas==2.1.4
 numpy==1.24.3

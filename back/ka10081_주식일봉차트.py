@@ -40,18 +40,19 @@ except Exception as e:
 
 
 # ============================================================================
-# ka10003: 주식일봉차트
+# ka10081: 주식일봉차트
 # ============================================================================
 
-def fn_ka10003(token, data, cont_yn='N', next_key=''):
+def fn_ka10081(token, data, cont_yn='N', next_key=''):
     """
-    ka10003 - 주식일봉차트 조회
+    ka10081 - 주식일봉차트 조회
     
     Parameters:
         token: 인증 토큰
-        data: 요청 데이터 (예: {'stk_cd': '005930', 'cnt': '30'})
+        data: 요청 데이터 (예: {'stk_cd': '005930', 'base_dt': '20251116', 'upd_stkpc_tp': '1'})
               - stk_cd: 종목코드
-              - cnt: 조회개수
+              - base_dt: 기준일자 (YYYYMMDD)
+              - upd_stkpc_tp: 수정주가구분 (0: 미적용, 1: 적용)
         cont_yn: 연속조회 여부 ('N' 또는 'Y')
         next_key: 연속조회 키
     
@@ -67,20 +68,24 @@ def fn_ka10003(token, data, cont_yn='N', next_key=''):
         'authorization': f'Bearer {token}',
         'cont-yn': cont_yn,
         'next-key': next_key,
-        'api-id': 'ka10003',
+        'api-id': 'ka10081',
     }
 
     try:
         response = requests.post(url, headers=headers, json=data)
         result = response.json()
         
-        print(f'\n=== ka10003 (주식일봉차트) 결과 ===')
+        print(f'\n=== ka10081 (주식일봉차트) 결과 ===')
         print(f'상태 코드: {response.status_code}')
         print(f'응답 결과:')
         print(json.dumps(result, indent=4, ensure_ascii=False))
         
         if result.get('return_code') == 0:
             print(f'\n✅ 조회 성공!')
+            if 'stk_dt_pole_chart_qry' in result:
+                print(f'   일봉 데이터 개수: {len(result["stk_dt_pole_chart_qry"])}개')
+                if len(result['stk_dt_pole_chart_qry']) > 0:
+                    print(f'   첫 번째 데이터: {result["stk_dt_pole_chart_qry"][0]}')
         else:
             print(f'\n❌ 조회 실패: {result.get("return_msg")}')
         
@@ -98,21 +103,27 @@ if __name__ == '__main__':
     MY_ACCESS_TOKEN = access_token
     
     print("\n" + "="*70)
-    print("📊 ka10003 - 주식일봉차트 조회")
+    print("📊 ka10081 - 주식일봉차트 조회")
     print("="*70)
     
-    # 삼성전자 30일 조회
-    print("\n[1] 삼성전자(005930) 최근 30일 일봉 조회")
-    result = fn_ka10003(
+    # 삼성전자 10일 조회 (오늘 날짜 기준)
+    from datetime import datetime
+    today = datetime.now().strftime('%Y%m%d')
+    
+    print(f"\n[1] 삼성전자(005930) 기준일자 {today} 일봉 조회")
+    result = fn_ka10081(
         token=MY_ACCESS_TOKEN,
         data={
             'stk_cd': '005930',
-            'cnt': '30'  # 30일
+            'base_dt': today,  # 오늘 날짜
+            'upd_stkpc_tp': '1'  # 수정주가 적용
         }
     )
     
     print("\n" + "="*70)
     print("✅ 조회 완료")
     print("="*70)
-    print("\n⚠️ 참고: 현재 엔드포인트가 API ID와 일치하지 않을 수 있습니다.")
-    print("공식 문서에서 정확한 엔드포인트를 확인해주세요.")
+    print("\n📌 참고:")
+    print("  - ka10081: 주식일봉차트 조회")
+    print("  - 응답 필드: stk_dt_pole_chart_qry")
+    print("  - 엔드포인트: /api/dostk/chart")

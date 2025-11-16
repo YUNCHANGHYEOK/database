@@ -26,6 +26,13 @@ const server = http.createServer((req, res) => {
     return;
   }
   
+  // 차트 API 엔드포인트 처리
+  if (parsedUrl.pathname.startsWith("/api/chart/")) {
+    const symbol = parsedUrl.pathname.split('/')[3];
+    handleChartAPI(req, res, symbol);
+    return;
+  }
+  
   // 정적 파일 처리
   if (req.url === "/" || req.url === "/index.html") {
     filePath = path.join(filePath, "index.html");
@@ -58,6 +65,30 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// 차트 API 핸들러
+function handleChartAPI(req, res, symbol) {
+  console.log(`📈 차트 API 호출 요청: ${symbol}`);
+  
+  getKiwoomToken()
+    .then(token => {
+      return callKa10081(token, symbol);
+    })
+    .then(chartData => {
+      console.log('차트 데이터 응답 성공');
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(chartData));
+    })
+    .catch(error => {
+      console.error('차트 API 호출 오류:', error.message);
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({
+        success: false,
+        error: "차트 데이터 조회 실패",
+        message: error.message
+      }));
+    });
+}
+
 // 키움 API 호출 함수 (실제 API만 사용)
 function handleStocksAPI(req, res) {
   console.log("📊 키움 API 호출 요청 받음...");
@@ -81,6 +112,72 @@ function handleStocksAPI(req, res) {
         timestamp: new Date().toISOString()
       }));
     });
+}
+
+// 키움 토큰만 발급받는 함수 (차트 API용)
+async function getKiwoomToken() {
+  const https = require('https');
+  
+  return new Promise((resolve, reject) => {
+    const accessParams = {
+      grant_type: 'client_credentials',
+      appkey: 'O3kJjNLr_qpv4UaI_dlJcu4NZf_8Q4AIGXMu2UZr5WE',
+      secretkey: 'AVTWCe2Wi6h4HX3q3oly0FN2Gq5VsvWNz_W7M9c0kNY'
+    };
+    
+    const postData = JSON.stringify(accessParams);
+    
+    const options = {
+      hostname: 'mockapi.kiwoom.com',
+      port: 443,
+      path: '/oauth2/token',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+    
+    const req = https.request(options, (response) => {
+      let data = '';
+      
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      response.on('end', () => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`토큰 발급 실패: ${response.statusCode}`));
+          return;
+        }
+        
+        try {
+          const apiResponse = JSON.parse(data);
+          const token = apiResponse.token || apiResponse.access_token;
+          
+          if (token) {
+            console.log('✅ 토큰 발급 성공:', token.substring(0, 20) + '...');
+            resolve(token);
+          } else {
+            reject(new Error('토큰을 찾을 수 없습니다'));
+          }
+        } catch (parseError) {
+          reject(new Error('토큰 응답 파싱 실패: ' + parseError.message));
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(new Error('토큰 발급 네트워크 오류: ' + error.message));
+    });
+    
+    req.setTimeout(10000, () => {
+      reject(new Error('토큰 발급 타임아웃'));
+    });
+    
+    req.write(postData);
+    req.end();
+  });
 }
 
 // 키움 API 호출 함수 (실제 API만 처리)
@@ -196,6 +293,103 @@ async function getStockDataWithToken(token) {
       console.error('❌ ka10001 호출 오류:', error);
       reject(error);
     }
+  });
+}
+
+// ka10081 (주식일봉차트) API 호출
+function callKa10081(token, symbol) {
+  const https = require('https');
+  
+  return new Promise((resolve, reject) => {
+    // 기준 날짜 (오늘 날짜 - YYYYMMDD 형식)
+    const today = new Date();
+    const baseDate = today.getFullYear().toString() + 
+                    String(today.getMonth() + 1).padStart(2, '0') + 
+                    String(today.getDate()).padStart(2, '0');
+    
+    const postData = JSON.stringify({
+      'stk_cd': symbol,
+      'base_dt': baseDate,  // 기준일자 (YYYYMMDD)
+      'upd_stkpc_tp': '1'   // 수정주가 적용
+    });
+    
+    const options = {
+      hostname: 'mockapi.kiwoom.com',
+      port: 443,
+      path: '/api/dostk/chart',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': `Bearer ${token}`,
+        'cont-yn': 'N',
+        'next-key': '',
+        'api-id': 'ka10081'  // 일봉차트 API
+      }
+    };
+    
+    const req = https.request(options, (response) => {
+      let data = '';
+      
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      response.on('end', () => {
+        try {
+          const apiResult = JSON.parse(data);
+          console.log(`📊 ka10081 API 응답 (${symbol}):`, JSON.stringify(apiResult).substring(0, 500) + '...');
+          
+          // 일봉 응답 구조: stk_dt_pole_chart_qry
+          const chartArray = apiResult.stk_dt_pole_chart_qry || 
+                           apiResult.output || 
+                           apiResult.data || 
+                           apiResult.stk_min_pole_chart_qry;
+          
+          if (apiResult.return_code === 0 && chartArray && Array.isArray(chartArray)) {
+            // 성공 - 차트 데이터 가공 (최대 720개)
+            const chartData = chartArray.slice(0, 720).map(item => ({
+              date: item.dt,  // 일봉은 dt 필드 (YYYYMMDD)
+              close: parseInt((item.cur_prc || '0').replace(/[\+\-]/g, '')),
+              open: parseInt((item.open_pric || '0').replace(/[\+\-]/g, '')),
+              high: parseInt((item.high_pric || '0').replace(/[\+\-]/g, '')),
+              low: parseInt((item.low_pric || '0').replace(/[\+\-]/g, '')),
+              volume: parseInt(item.trde_qty || item.trde_prca || 0)
+            }));
+            
+            console.log(`✅ ${symbol} 차트 데이터 ${chartData.length}개 생성`);
+            
+            resolve({
+              success: true,
+              symbol: symbol,
+              data: chartData
+            });
+          } else {
+            // API 오류
+            console.log(`❌ ${symbol} ka10081 실패:`, apiResult.return_msg);
+            console.log(`   return_code: ${apiResult.return_code}`);
+            console.log(`   응답 키들:`, Object.keys(apiResult));
+            resolve({
+              success: false,
+              symbol: symbol,
+              error: apiResult.return_msg || '차트 데이터 필드를 찾을 수 없습니다'
+            });
+          }
+        } catch (parseError) {
+          reject(new Error(`차트 데이터 파싱 실패: ${parseError.message}`));
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(new Error(`차트 네트워크 오류: ${error.message}`));
+    });
+    
+    req.setTimeout(5000, () => {
+      reject(new Error('차트 요청 타임아웃'));
+    });
+    
+    req.write(postData);
+    req.end();
   });
 }
 

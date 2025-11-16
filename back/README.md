@@ -5,7 +5,7 @@
 ## 🛠️ 기술 스택
 
 - **Python 3.8+**: 메인 프로그래밍 언어
-- **Flask**: 웹 프레임워크
+- **Node.js**: 웹 서버 프레임워크
 - **pandas, numpy**: 데이터 처리 및 분석
 - **yfinance**: 주식 데이터 API
 - **PyKiwoom**: 키움증권 API 연동
@@ -21,8 +21,8 @@ pip install -r requirements.txt
 ## 🚀 실행
 
 ```bash
-# Flask 서버 시작
-python app.py
+# Node.js 서버 시작
+node app.js
 
 # 키움증권 API 테스트
 python api.py
@@ -38,7 +38,7 @@ jupyter notebook test.ipynb
 
 ```
 back/
-├── app.py              # Flask 웹 서버
+├── app.js              # Node.js 웹 서버
 ├── api.py              # 키움증권 API 연동
 ├── kiwoom_test.py      # 키움증권 환경 테스트
 ├── test.ipynb          # 주피터 노트북 (데이터 분석)
@@ -59,6 +59,6 @@ back/
 - [x] 키움증권 API 연동 완료
 - [x] 데이터 수집 파이프라인 구축
 - [x] 차트 생성 기능
-- [ ] Flask REST API 구축
+- [ ] Node.js REST API 확장
 - [ ] 데이터베이스 연동
 - [ ] 실시간 데이터 스트리밍
