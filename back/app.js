@@ -4,6 +4,10 @@ const path = require("path");
 const { exec } = require("child_process");
 const url = require("url");
 
+// 토큰 캐싱
+let cachedToken = null;
+let tokenExpiry = null;
+
 const server = http.createServer((req, res) => {
   // CORS 헤더를 모든 응답에 추가
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,6 +23,13 @@ const server = http.createServer((req, res) => {
   
   const parsedUrl = url.parse(req.url, true);
   let filePath = path.join(__dirname, "../front");
+  
+  // favicon.ico 요청 처리 (404 오류 방지)
+  if (parsedUrl.pathname === "/favicon.ico") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
   
   // API 엔드포인트 처리
   if (parsedUrl.pathname === "/api/stocks") {
@@ -118,6 +129,12 @@ function handleStocksAPI(req, res) {
 async function getKiwoomToken() {
   const https = require('https');
   
+  // 캐시된 토큰이 있고 만료되지 않았으면 재사용
+  if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
+    console.log('✅ 캐시된 토큰 사용:', cachedToken.substring(0, 20) + '...');
+    return Promise.resolve(cachedToken);
+  }
+  
   return new Promise((resolve, reject) => {
     const accessParams = {
       grant_type: 'client_credentials',
@@ -156,7 +173,10 @@ async function getKiwoomToken() {
           const token = apiResponse.token || apiResponse.access_token;
           
           if (token) {
-            console.log('✅ 토큰 발급 성공:', token.substring(0, 20) + '...');
+            // 토큰 캐싱 (23시간 유효)
+            cachedToken = token;
+            tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
+            console.log('✅ 새 토큰 발급 및 캐싱:', token.substring(0, 20) + '...');
             resolve(token);
           } else {
             reject(new Error('토큰을 찾을 수 없습니다'));
@@ -182,79 +202,17 @@ async function getKiwoomToken() {
 
 // 키움 API 호출 함수 (실제 API만 처리)
 async function callKiwoomAPI() {
-  const https = require('https');
-  
-  return new Promise((resolve, reject) => {
-    // 키움증권 API 설정
-    const accessParams = {
-      grant_type: 'client_credentials',
-      appkey: 'O3kJjNLr_qpv4UaI_dlJcu4NZf_8Q4AIGXMu2UZr5WE',
-      secretkey: 'AVTWCe2Wi6h4HX3q3oly0FN2Gq5VsvWNz_W7M9c0kNY'
-    };
+  try {
+    // 공통 토큰 함수 사용
+    const token = await getKiwoomToken();
     
-    const postData = JSON.stringify(accessParams);
+    // 토큰으로 주식 데이터 요청
+    const stockData = await getStockDataWithToken(token);
+    return stockData;
     
-    const options = {
-      hostname: 'mockapi.kiwoom.com',
-      port: 443,
-      path: '/oauth2/token',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData)
-      }
-    };
-    
-    const req = https.request(options, (response) => {
-      let data = '';
-      
-      response.on('data', (chunk) => {
-        data += chunk;
-      });
-      
-      response.on('end', () => {
-        console.log('키움 API 응답 상태:', response.statusCode);
-        console.log('키움 API 응답 데이터:', data);
-        
-        if (response.statusCode !== 200) {
-          reject(new Error(`키움 API HTTP 오류: ${response.statusCode} - ${data}`));
-          return;
-        }
-        
-        try {
-          const apiResponse = JSON.parse(data);
-          
-          // 실제 키움 API 응답에서 토큰을 받았다면 주식 데이터 요청
-          if (apiResponse.token || apiResponse.access_token) {
-            const token = apiResponse.token || apiResponse.access_token;
-            console.log('키움 API 토큰 획득 성공:', token.substring(0, 20) + '...');
-            
-            // 실제 주식 데이터 요청 (ka10001 사용)
-            getStockDataWithToken(token)
-              .then(stockData => resolve(stockData))
-              .catch(error => reject(error));
-            
-          } else {
-            reject(new Error('키움 API에서 올바른 토큰을 받지 못함: ' + JSON.stringify(apiResponse)));
-          }
-          
-        } catch (parseError) {
-          reject(new Error('키움 API 응답 파싱 실패: ' + parseError.message));
-        }
-      });
-    });
-    
-    req.on('error', (error) => {
-      reject(new Error('키움 API 네트워크 오류: ' + error.message));
-    });
-    
-    req.setTimeout(10000, () => {
-      reject(new Error('키움 API 요청 타임아웃 (10초)'));
-    });
-    
-    req.write(postData);
-    req.end();
-  });
+  } catch (error) {
+    throw new Error('키움 API 호출 실패: ' + error.message);
+  }
 }
 
 // 토큰으로 실제 주식 데이터 요청 (ka10001만 사용)

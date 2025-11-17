@@ -234,11 +234,12 @@ footer {
 .chart-container {
     position: relative;
     width: 100%;
-    max-width: 1000px;
+    height: 500px;
     margin: 0 auto;
     padding: 1rem;
 }
 
 .chart-container canvas {
-    max-height: 400px;
+    width: 100% !important;
+    height: 100% !important;
 }
