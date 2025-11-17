@@ -34,7 +34,7 @@ function updateTime() {
 }
 
 // 데이터 새로고침 함수 (키움 API 호출)
-function refreshData() {
+async function refreshData() {
     const button = document.querySelector('.cta-button');
     const stockCards = document.querySelectorAll('.stock-card');
     
@@ -49,52 +49,50 @@ function refreshData() {
         card.classList.add('loading');
     });
     
-    // Node.js 서버를 통한 키움 API 호출
-    fetch('http://localhost:3000/api/stocks')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('📊 키움 API 응답:', data);
-            
-            // 서버 응답 데이터 확인 (배열 형태로 직접 전달됨)
-            if (Array.isArray(data) && data.length > 0) {
-                // 실제 주가 데이터로 업데이트
-                updateStockCardsWithRealData(data);
-                showNotification('✅ 키움 API(ka10001)에서 실시간 데이터를 가져왔습니다!');
-            } else if (data.success && data.stocks && data.stocks.length > 0) {
-                // 이전 형식 지원
-                updateStockCardsWithRealData(data.stocks);
-                showNotification('✅ 키움 API에서 실시간 데이터를 가져왔습니다!');
-            } else {
-                console.log('📊 받은 데이터:', data);
-                throw new Error('주식 데이터가 없습니다');
-            }
-        })
-        .catch(error => {
-            console.error('❌ 키움 API 호출 오류:', error);
-            showNotification('❌ 키움 API 호출 실패: ' + error.message, 'error');
-            
-            // 오류 상태를 화면에 표시
-            displayAPIError(error.message);
-        })
-        .finally(() => {
-            // 시간 업데이트
-            updateTime();
-            
-            // 로딩 상태 해제
-            if (button) {
-                button.textContent = '📊 데이터 새로고침';
-                button.disabled = false;
-            }
-            
-            stockCards.forEach(card => {
-                card.classList.remove('loading');
-            });
+    try {
+        // Node.js 서버를 통한 키움 API 호출
+        const response = await fetch('http://localhost:3000/api/stocks');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📊 키움 API 응답:', data);
+        
+        // 서버 응답 데이터 확인 (배열 형태로 직접 전달됨)
+        if (Array.isArray(data) && data.length > 0) {
+            // 실제 주가 데이터로 업데이트
+            updateStockCardsWithRealData(data);
+            showNotification('✅ 키움 API(ka10001)에서 실시간 데이터를 가져왔습니다!');
+        } else if (data.success && data.stocks && data.stocks.length > 0) {
+            // 이전 형식 지원
+            updateStockCardsWithRealData(data.stocks);
+            showNotification('✅ 키움 API에서 실시간 데이터를 가져왔습니다!');
+        } else {
+            console.log('📊 받은 데이터:', data);
+            throw new Error('주식 데이터가 없습니다');
+        }
+    } catch (error) {
+        console.error('❌ 키움 API 호출 오류:', error);
+        showNotification('❌ 키움 API 호출 실패: ' + error.message, 'error');
+        
+        // 오류 상태를 화면에 표시
+        displayAPIError(error.message);
+    } finally {
+        // 시간 업데이트
+        updateTime();
+        
+        // 로딩 상태 해제
+        if (button) {
+            button.textContent = '📊 데이터 새로고침';
+            button.disabled = false;
+        }
+        
+        stockCards.forEach(card => {
+            card.classList.remove('loading');
         });
+    }
 }
 
 // 실제 키움 API 데이터로 주식 카드 업데이트 (ka10001 전용)
@@ -361,7 +359,7 @@ function renderStockChart(chartData, symbol) {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             interaction: {
                 mode: 'index',
                 intersect: false
@@ -446,3 +444,14 @@ document.addEventListener('keydown', function(e) {
 
 // 자동 시간 업데이트 (1분마다)
 setInterval(updateTime, 60000);
+
+// 화면 크기 변경 시 차트 리사이즈
+let resizeTimeout;
+window.addEventListener('resize', function() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(function() {
+        if (stockChartInstance) {
+            stockChartInstance.resize();
+        }
+    }, 250);
+});
