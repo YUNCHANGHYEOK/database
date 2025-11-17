@@ -1,7 +1,7 @@
 name: 🚀 Feature Request
-description: 새로운 기능 제안
-title: "[FEATURE] "
-labels: ["feature"]
+description: 새로운 기능 제안 (feat 브랜치)
+title: "[FEAT] "
+labels: ["feature", "feat"]
 body:
   - type: textarea
     id: description
