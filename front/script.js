@@ -27,10 +27,10 @@ function updateTime() {
         second: '2-digit'
     });
     
-    const updateElement = document.getElementById('lastUpdate');
-    if (updateElement) {
-        updateElement.textContent = timeString;
-    }
+    const updateElements = document.querySelectorAll('[data-last-update]');
+    updateElements.forEach(element => {
+        element.textContent = timeString;
+    });
 }
 
 // 데이터 새로고침 함수 (키움 API 호출)
