@@ -23,8 +23,9 @@ jobs:
           
       - name: 🌿 Create branch from issue
         run: |
-          # 이슈 번호 추출
+          # 이슈 번호 & 제목 추출
           ISSUE_NUMBER=${{ github.event.issue.number }}
+          ISSUE_TITLE="${{ github.event.issue.title }}"
           
           # 이슈 타입 확인
           if [[ "${{ contains(github.event.issue.labels.*.name, 'feature') }}" == "true" ]]; then
@@ -46,10 +47,12 @@ jobs:
           git checkout -b $BRANCH_NAME
           git push -u origin $BRANCH_NAME
           
-          # 브랜치 로그 업데이트 (선택사항)
-          echo "🌿 Branch $BRANCH_NAME created for issue #$ISSUE_NUMBER - $(date)" >> .github/branch-log.md
+          # 브랜치 로그 업데이트
+          echo "🌿 Branch $BRANCH_NAME created for issue #$ISSUE_NUMBER - \"$ISSUE_TITLE\" - $(date)" >> .github/branch-log.md
           git add .github/branch-log.md
-          git commit -m "🌿 Create branch $BRANCH_NAME for issue #$ISSUE_NUMBER"
+          
+          # 커밋 메시지에도 이슈 제목 포함
+          git commit -m "🌿 Create branch $BRANCH_NAME for issue #$ISSUE_NUMBER - \"$ISSUE_TITLE\""
           git push origin $BRANCH_NAME
           
       - name: 📝 Comment on issue
@@ -57,20 +60,18 @@ jobs:
         with:
           script: |
             const issueNumber = context.issue.number;
+            const issueTitle = context.payload.issue.title;
             const labels = context.payload.issue.labels.map(label => label.name);
-            let branchPrefix = 'feat'; // 기본값
-            
-            if (labels.includes('feature')) {
-              branchPrefix = 'feat';
-            } else if (labels.includes('bug')) {
-              branchPrefix = 'fix';
-            }
-            
+
+            let branchPrefix = 'feat';
+            if (labels.includes('feature')) branchPrefix = 'feat';
+            else if (labels.includes('bug')) branchPrefix = 'fix';
+
             const branchName = `${branchPrefix}/${issueNumber}`;
             
             github.rest.issues.createComment({
               issue_number: issueNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🌿 브랜치가 자동으로 생성되었습니다: \`${branchName}\`\n\n### 다음 단계:\n1. 로컬에서 브랜치를 체크아웃하세요:\n   \`\`\`bash\n   git fetch origin\n   git checkout ${branchName}\n   \`\`\`\n\n2. 작업을 완료한 후 PR을 생성해주세요.\n3. PR 제목에 \`Closes #${issueNumber}\`를 포함해주세요.\n\nHappy coding! 🚀`
+              body: `브랜치가 자동으로 생성되었습니다: \`${branchName}\`\n\n📌 **이슈 제목:** ${issueTitle}\n\n### 다음 단계:\n1. 로컬에서 브랜치를 체크아웃하세요:\n   \`\`\`bash\n   git fetch origin\n   git checkout ${branchName}\n   \`\`\`\n\n2. 작업을 완료한 후 PR을 생성해주세요.\n3. PR 제목에 \`Closes #${issueNumber}\`를 포함해주세요.\n\nHappy coding! 🚀`
             });
