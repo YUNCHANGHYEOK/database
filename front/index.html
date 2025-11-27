@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KRX Pulse - Stock Data Dashboard</title>
+    <title>KRX Pulse - 주식 데이터 대시보드</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="style.css">
@@ -15,69 +15,69 @@
             <div class="live-dot" aria-hidden="true"></div>
             <div>
                 <p class="eyebrow">KRX Pulse</p>
-                <h1>Track Korean stocks at a glance</h1>
+                <h1>한국 주식을 한눈에 추적하세요</h1>
             </div>
         </div>
         <nav class="site-nav">
-            <a href="#stocks">Watchlist</a>
-            <a href="#chart">Chart</a>
-            <a href="#features">Features</a>
-            <a href="#cta">Refresh</a>
+            <a href="#stocks">관심목록</a>
+            <a href="#chart">차트</a>
+            <a href="#features">기능</a>
+            <a href="#cta">새로고침</a>
         </nav>
     </header>
 
     <main>
         <section class="hero" id="hero">
             <div class="hero-text">
-                <p class="eyebrow pill">Data-first dashboard</p>
-                <h2>720-day line chart with live pricing</h2>
-                <p>KRX Pulse connects the KRX API to cards and charts so you can read trend, volatility, and volume fingerprints without digging around.</p>
+                <p class="eyebrow pill">데이터 우선 대시보드</p>
+                <h2>실시간 가격을 반영한 720일 라인 차트</h2>
+                <p>KRX Pulse는 KRX API를 카드와 차트에 연결해 흐름·변동성·거래량을 빠르게 읽을 수 있도록 돕습니다.</p>
                 <ul class="hero-highlights">
-                    <li>Live API-backed cards</li>
-                    <li>Trend-first charting</li>
-                    <li>Focused watchlist view</li>
+                    <li>실시간 API 기반 카드</li>
+                    <li>추세에 집중한 차트</li>
+                    <li>핵심만 보여주는 관심목록</li>
                 </ul>
                 <div class="hero-actions">
-                    <a class="primary-link" href="#cta">Reload data</a>
-                    <a class="secondary-link" href="#chart">Jump to chart</a>
+                    <a class="primary-link" href="#cta">데이터 다시 불러오기</a>
+                    <a class="secondary-link" href="#chart">차트로 이동</a>
                 </div>
             </div>
             <div class="hero-panel">
                 <div class="snapshot">
-                    <p class="snapshot-label">Last update</p>
-                    <p class="snapshot-value" data-last-update>Loading...</p>
+                    <p class="snapshot-label">마지막 업데이트</p>
+                    <p class="snapshot-value" data-last-update>불러오는 중...</p>
                 </div>
                 <div class="snapshot-grid">
                     <div>
-                        <p class="snapshot-label">Watching</p>
+                        <p class="snapshot-label">관심 종목</p>
                         <p class="snapshot-value">Samsung / SK hynix / NAVER</p>
                     </div>
                     <div>
-                        <p class="snapshot-label">Volatility</p>
+                        <p class="snapshot-label">변동성</p>
                         <p class="snapshot-value positive">+1.8%</p>
                     </div>
                 </div>
-                <p class="hero-note">Cards and the chart reflect KRX pricing collected by the Node API.</p>
+                <p class="hero-note">카드와 차트는 Node API로 수집한 KRX 시세를 반영합니다.</p>
             </div>
         </section>
 
         <section class="market-overview" id="stocks">
             <div class="section-heading">
                 <div>
-                    <p class="eyebrow">Market Watchlist</p>
-                    <h2>Today's key tickers</h2>
+                    <p class="eyebrow">시장 관심목록</p>
+                    <h2>오늘의 주요 종목</h2>
                 </div>
                 <div class="section-actions">
-                    <button type="button" class="chip is-active">Large cap</button>
-                    <button type="button" class="chip">Growth</button>
-                    <button type="button" class="chip">Dividend</button>
+                    <button type="button" class="chip is-active">대형주</button>
+                    <button type="button" class="chip">성장주</button>
+                    <button type="button" class="chip">배당주</button>
                 </div>
             </div>
             <div class="stock-grid" id="stockGrid">
                 <div class="stock-card">
                     <div class="card-meta">
                         <p class="symbol">005930.KS</p>
-                        <span class="tag">IT leader</span>
+                        <span class="tag">IT 선도</span>
                     </div>
                     <h3>Samsung Electronics</h3>
                     <p class="price">62,500</p>
@@ -86,7 +86,7 @@
                 <div class="stock-card">
                     <div class="card-meta">
                         <p class="symbol">000660.KS</p>
-                        <span class="tag">Semiconductor</span>
+                        <span class="tag">반도체</span>
                     </div>
                     <h3>SK hynix</h3>
                     <p class="price">128,000</p>
@@ -95,7 +95,7 @@
                 <div class="stock-card">
                     <div class="card-meta">
                         <p class="symbol">035420.KS</p>
-                        <span class="tag">Internet</span>
+                        <span class="tag">인터넷</span>
                     </div>
                     <h3>NAVER</h3>
                     <p class="price">195,000</p>
@@ -104,17 +104,17 @@
             </div>
             <div class="market-metrics">
                 <div class="metric-card">
-                    <p class="metric-label">KOSPI index</p>
+                    <p class="metric-label">KOSPI 지수</p>
                     <p class="metric-value">2,675.24</p>
                     <p class="metric-change positive">+0.54%</p>
                 </div>
                 <div class="metric-card">
-                    <p class="metric-label">Institutional flow</p>
-                    <p class="metric-value">Sideways</p>
+                    <p class="metric-label">기관 수급</p>
+                    <p class="metric-value">중립</p>
                     <p class="metric-change neutral">0.0%</p>
                 </div>
                 <div class="metric-card">
-                    <p class="metric-label">Foreign inflow</p>
+                    <p class="metric-label">외국인 순유입</p>
                     <p class="metric-value">+98B</p>
                     <p class="metric-change negative">-0.28%</p>
                 </div>
@@ -124,10 +124,10 @@
         <section class="chart-section" id="chart">
             <div class="section-heading">
                 <div>
-                    <p class="eyebrow">720 data points</p>
-                    <h2>Samsung trend chart</h2>
+                    <p class="eyebrow">720개 데이터 포인트</p>
+                    <h2>삼성전자 추세 차트</h2>
                 </div>
-                <button type="button" class="secondary-link" onclick="loadStockChart('005930')">Refresh chart</button>
+                <button type="button" class="secondary-link" onclick="loadStockChart('005930')">차트 새로고침</button>
             </div>
             <div class="chart-panel">
                 <div class="chart-container">
@@ -135,16 +135,16 @@
                 </div>
                 <div class="chart-side-panel">
                     <article class="chart-info">
-                        <h3>What to watch</h3>
+                        <h3>체크 포인트</h3>
                         <ul>
-                            <li>Check recent highs/lows and whether price is boxing.</li>
-                            <li>Watch moving average support and breaks.</li>
-                            <li>Volume spikes often precede trend shifts.</li>
+                            <li>최근 고점·저점과 박스권 여부를 살핍니다.</li>
+                            <li>이동평균선 지지와 이탈 구간을 봅니다.</li>
+                            <li>거래량 급증은 추세 전환을 앞두곤 합니다.</li>
                         </ul>
                     </article>
                     <article class="chart-info highlight">
-                        <h3>Chart summary</h3>
-                        <p>We plot 720 data points as a line for quick reads on mid-to-long term trend and volatility.</p>
+                        <h3>차트 요약</h3>
+                        <p>720개의 데이터를 라인 차트로 그려 중장기 추세와 변동성을 한눈에 보여줍니다.</p>
                     </article>
                 </div>
             </div>
@@ -152,29 +152,29 @@
 
         <section class="features" id="features">
             <div class="section-heading stacked">
-                <p class="eyebrow">Core features</p>
-                <h2>Tools that speed up your calls</h2>
+                <p class="eyebrow">핵심 기능</p>
+                <h2>빠른 판단을 돕는 도구</h2>
             </div>
             <div class="feature-grid">
                 <div class="feature-card">
                     <div class="icon" aria-hidden="true">LP</div>
-                    <h3>Live pricing</h3>
-                    <p>Expose KRX quotes instantly with concise card layouts.</p>
+                    <h3>실시간 시세</h3>
+                    <p>KRX 호가와 체결을 카드로 즉시 보여줍니다.</p>
                 </div>
                 <div class="feature-card">
                     <div class="icon" aria-hidden="true">AR</div>
-                    <h3>Auto refresh</h3>
-                    <p>Key indicators update on a schedule and can be pulled on-demand.</p>
+                    <h3>자동 새로고침</h3>
+                    <p>중요 지표를 주기적으로 업데이트하고 원클릭으로 재요청합니다.</p>
                 </div>
                 <div class="feature-card">
                     <div class="icon" aria-hidden="true">CI</div>
-                    <h3>Chart insight</h3>
-                    <p>Chart.js line visuals reveal trend, volatility, and support zones.</p>
+                    <h3>차트 인사이트</h3>
+                    <p>Chart.js 라인 시각화로 추세·변동성·지지 구간을 읽습니다.</p>
                 </div>
                 <div class="feature-card">
                     <div class="icon" aria-hidden="true">AL</div>
-                    <h3>Alerts & sparks</h3>
-                    <p>Flag key zones so you never miss abrupt volatility.</p>
+                    <h3>알림 및 스파크</h3>
+                    <p>급격한 변동성을 놓치지 않도록 주요 구간을 표시합니다.</p>
                 </div>
             </div>
         </section>
@@ -182,20 +182,20 @@
         <section class="cta" id="cta">
             <div class="cta-card">
                 <div>
-                    <p class="eyebrow">Data refresh</p>
-                    <h2>Pull the latest pricing now</h2>
-                    <p>One tap triggers the backend API and updates every card, chart, and timestamp.</p>
+                    <p class="eyebrow">데이터 새로고침</p>
+                    <h2>지금 최신 시세를 불러오세요</h2>
+                    <p>한 번 클릭으로 백엔드 API를 호출해 카드·차트·시간을 모두 업데이트합니다.</p>
                 </div>
                 <div class="cta-actions">
-                    <button onclick="refreshData()" class="cta-button">Request latest data</button>
-                    <p class="update-info">Last update: <span data-last-update>Loading...</span></p>
+                    <button onclick="refreshData()" class="cta-button">최신 데이터 요청</button>
+                    <p class="update-info">업데이트: <span data-last-update>불러오는 중...</span></p>
                 </div>
             </div>
         </section>
     </main>
 
     <footer>
-        <p>&copy; 2025 KRX Pulse Dashboard - Made for data-first investors</p>
+        <p>&copy; 2025 KRX Pulse Dashboard - 데이터 중심 투자자를 위해 제작되었습니다</p>
     </footer>
 
     <script src="script.js"></script>

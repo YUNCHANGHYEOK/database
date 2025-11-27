@@ -1,21 +1,19 @@
-// 간단한 JavaScript 기능들
-
-// 페이지 로드 시 실행
-document.addEventListener('DOMContentLoaded', function() {
+// 페이지 로드 시 초기 데이터와 애니메이션을 설정합니다.
+document.addEventListener('DOMContentLoaded', () => {
     updateTime();
     addAnimations();
-    
-    // 페이지 로드 시 실제 키움 API 데이터 한 번 가져오기
+
+    // 최초 로딩 후 API 데이터 요청
     setTimeout(() => {
-        console.log('📊 페이지 로드 후 키움 API 데이터 자동 로딩...');
+        console.log('초기 데이터 로딩을 시작합니다.');
         refreshData();
         loadStockChart('005930'); // 삼성전자 차트 로드
     }, 1000);
-    
-    console.log('📊 주식 데이터 분석 웹사이트가 로드되었습니다!');
+
+    console.log('KRX 주식 데이터 대시보드가 로드되었습니다.');
 });
 
-// 시간 업데이트 함수
+// 현재 시간을 화면에 표시
 function updateTime() {
     const now = new Date();
     const timeString = now.toLocaleString('ko-KR', {
@@ -26,152 +24,131 @@ function updateTime() {
         minute: '2-digit',
         second: '2-digit'
     });
-    
+
     const updateElements = document.querySelectorAll('[data-last-update]');
     updateElements.forEach(element => {
         element.textContent = timeString;
     });
 }
 
-// 데이터 새로고침 함수 (키움 API 호출)
+// 데이터 새로고침 (KRX API 호출)
 async function refreshData() {
     const button = document.querySelector('.cta-button');
     const stockCards = document.querySelectorAll('.stock-card');
-    
-    // 버튼 로딩 상태
+
     if (button) {
-        button.textContent = '🔄 키움 API 호출 중...';
+        button.textContent = 'KRX API 호출 중...';
         button.disabled = true;
     }
-    
-    // 주식 카드에 로딩 애니메이션 추가
-    stockCards.forEach(card => {
-        card.classList.add('loading');
-    });
-    
+
+    stockCards.forEach(card => card.classList.add('loading'));
+
     try {
-        // Node.js 서버를 통한 키움 API 호출
         const response = await fetch('http://localhost:3000/api/stocks');
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        console.log('📊 키움 API 응답:', data);
-        
-        // 서버 응답 데이터 확인 (배열 형태로 직접 전달됨)
+        console.log('KRX 실시간 API 응답:', data);
+
         if (Array.isArray(data) && data.length > 0) {
-            // 실제 주가 데이터로 업데이트
             updateStockCardsWithRealData(data);
-            showNotification('✅ 키움 API(ka10001)에서 실시간 데이터를 가져왔습니다!');
-        } else if (data.success && data.stocks && data.stocks.length > 0) {
-            // 이전 형식 지원
+            showNotification('KRX API(ka10001)에서 실시간 데이터가 도착했습니다.');
+        } else if (data.success && Array.isArray(data.stocks) && data.stocks.length > 0) {
             updateStockCardsWithRealData(data.stocks);
-            showNotification('✅ 키움 API에서 실시간 데이터를 가져왔습니다!');
+            showNotification('KRX API에서 실시간 데이터가 도착했습니다.');
         } else {
-            console.log('📊 받은 데이터:', data);
-            throw new Error('주식 데이터가 없습니다');
+            console.log('수신된 데이터:', data);
+            throw new Error('주식 데이터가 비어 있습니다.');
         }
     } catch (error) {
-        console.error('❌ 키움 API 호출 오류:', error);
-        showNotification('❌ 키움 API 호출 실패: ' + error.message, 'error');
-        
-        // 오류 상태를 화면에 표시
+        console.error('KRX API 호출 오류:', error);
+        showNotification('KRX API 호출 실패: ' + error.message, 'error');
         displayAPIError(error.message);
     } finally {
-        // 시간 업데이트
         updateTime();
-        
-        // 로딩 상태 해제
+
         if (button) {
-            button.textContent = '📊 데이터 새로고침';
+            button.textContent = '최신 데이터 요청';
             button.disabled = false;
         }
-        
-        stockCards.forEach(card => {
-            card.classList.remove('loading');
-        });
+
+        stockCards.forEach(card => card.classList.remove('loading'));
     }
 }
 
-// 실제 키움 API 데이터로 주식 카드 업데이트 (ka10001 전용)
+// KRX API 응답으로 주식 카드 업데이트 (ka10001 대응)
 function updateStockCardsWithRealData(stockData) {
     const stockCards = document.querySelectorAll('.stock-card');
-    
-    console.log('📊 업데이트할 주식 데이터:', stockData);
-    
+
+    console.log('카드 업데이트용 주식 데이터:', stockData);
+
     stockCards.forEach((card, index) => {
-        if (stockData[index]) {
-            const stock = stockData[index];
-            const nameElement = card.querySelector('h3');
-            const symbolElement = card.querySelector('.symbol');
-            const priceElement = card.querySelector('.price');
-            const changeElement = card.querySelector('.change');
-            
-            // ka10001 응답 형식에 맞춰 데이터 추출
-            const stockName = stock.name || stock.stock_name || '알 수 없음';
-            const stockCode = stock.symbol || stock.stock_code || '';
-            const currentPrice = Math.abs(parseInt(stock.price || stock.current_price || 0));
-            const changePrice = parseInt(stock.change || stock.change_price || 0);
-            const changeRate = parseFloat(stock.changePercent || stock.change_rate || 0);
-            
-            console.log(`📈 ${stockName}: ${currentPrice}원 (${changeRate}%)`);
-            
-            // 주식 정보 업데이트
-            if (nameElement) nameElement.textContent = stockName;
-            if (symbolElement) symbolElement.textContent = stockCode;
-            if (priceElement) {
-                priceElement.textContent = `₩${currentPrice.toLocaleString()}`;
-            }
-            
-            if (changeElement) {
-                const sign = changeRate >= 0 ? '+' : '';
-                changeElement.textContent = `${sign}${changePrice.toLocaleString()} (${sign}${changeRate}%)`;
-                changeElement.className = `change ${changeRate >= 0 ? 'positive' : 'negative'}`;
-            }
-            
-            // 카드에 업데이트 효과 추가
-            card.style.transform = 'scale(1.02)';
-            card.style.borderLeft = changeRate >= 0 ? '4px solid #2ecc71' : '4px solid #e74c3c';
-            setTimeout(() => {
-                card.style.transform = 'scale(1)';
-            }, 200);
+        if (!stockData[index]) return;
+
+        const stock = stockData[index];
+        const nameElement = card.querySelector('h3');
+        const symbolElement = card.querySelector('.symbol');
+        const priceElement = card.querySelector('.price');
+        const changeElement = card.querySelector('.change');
+
+        const stockName = stock.name || stock.stock_name || '종목명 없음';
+        const stockCode = stock.symbol || stock.stock_code || '';
+        const currentPrice = Math.abs(Number(stock.price || stock.current_price || 0));
+        const changePrice = Number(stock.change || stock.change_price || 0);
+        const changeRate = Number(stock.changePercent || stock.change_rate || 0);
+
+        console.log(`업데이트: ${stockName} - ${currentPrice}원 (${changeRate}%)`);
+
+        if (nameElement) nameElement.textContent = stockName;
+        if (symbolElement) symbolElement.textContent = stockCode;
+        if (priceElement) priceElement.textContent = `${currentPrice.toLocaleString()}`;
+
+        if (changeElement) {
+            const sign = changeRate >= 0 ? '+' : '';
+            changeElement.textContent = `${sign}${changePrice.toLocaleString()} (${sign}${changeRate.toFixed(2)}%)`;
+            changeElement.className = `change ${changeRate >= 0 ? 'positive' : 'negative'}`;
         }
+
+        card.style.transform = 'scale(1.02)';
+        card.style.borderLeft = changeRate >= 0 ? '4px solid #2ecc71' : '4px solid #e74c3c';
+        setTimeout(() => {
+            card.style.transform = 'scale(1)';
+        }, 200);
     });
-    
-    console.log('✅ 주식 카드가 ka10001 데이터로 업데이트되었습니다.');
+
+    console.log('주식 카드가 실시간 데이터로 업데이트되었습니다.');
 }
 
-// API 오류를 화면에 표시
+// API 오류 상태 표시
 function displayAPIError(message) {
     const stockCards = document.querySelectorAll('.stock-card');
-    
+
     stockCards.forEach(card => {
         const priceElement = card.querySelector('.price');
         const changeElement = card.querySelector('.change');
-        
+
         if (priceElement && changeElement) {
             priceElement.textContent = 'API 오류';
             priceElement.style.color = '#e74c3c';
-            changeElement.textContent = '키움 API 연결 실패';
+            changeElement.textContent = 'KRX API 연결 실패';
             changeElement.className = 'change negative';
         }
-        
-        // 카드에 오류 스타일 적용
+
         card.style.borderLeft = '4px solid #e74c3c';
         card.style.backgroundColor = 'rgba(231, 76, 60, 0.05)';
     });
-    
-    console.log('❌ API 오류가 화면에 표시되었습니다:', message);
+
+    console.log('API 오류가 화면에 표시되었습니다:', message);
 }
 
-// 애니메이션 추가
+// 카드/기능 섹션 진입 시 페이드 인
 function addAnimations() {
     const cards = document.querySelectorAll('.stock-card, .feature-card');
-    
-    // Intersection Observer로 스크롤 애니메이션
-    const observer = new IntersectionObserver((entries) => {
+
+    const observer = new IntersectionObserver(entries => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.style.opacity = '1';
@@ -179,7 +156,7 @@ function addAnimations() {
             }
         });
     });
-    
+
     cards.forEach(card => {
         card.style.opacity = '0';
         card.style.transform = 'translateY(20px)';
@@ -188,21 +165,19 @@ function addAnimations() {
     });
 }
 
-// 알림 메시지 표시 (에러 타입 지원)
+// 알림 토스트 표시
 function showNotification(message, type = 'success') {
-    // 기존 알림 제거
     const existingNotification = document.querySelector('.notification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
-    
-    // 새 알림 생성
+    if (existingNotification) existingNotification.remove();
+
     const notification = document.createElement('div');
     notification.className = 'notification';
     notification.textContent = message;
-    
-    const backgroundColor = type === 'error' ? 'rgba(231, 76, 60, 0.95)' : 'rgba(46, 204, 113, 0.95)';
-    
+
+    const backgroundColor = type === 'error'
+        ? 'rgba(231, 76, 60, 0.95)'
+        : 'rgba(46, 204, 113, 0.95)';
+
     notification.style.cssText = `
         position: fixed;
         top: 20px;
@@ -219,32 +194,26 @@ function showNotification(message, type = 'success') {
         max-width: 400px;
         word-wrap: break-word;
     `;
-    
+
     document.body.appendChild(notification);
-    
-    // 애니메이션으로 나타내기
+
     setTimeout(() => {
         notification.style.transform = 'translateX(0)';
     }, 100);
-    
-    // 3초 후 자동 제거
+
     setTimeout(() => {
         notification.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
+        setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
 
-// 차트 관련 변수
+// 차트 인스턴스
 let stockChartInstance = null;
 
-// 주식 차트 로드 함수
+// 주식 차트 로드
 function loadStockChart(symbol) {
-    console.log(`📈 ${symbol} 차트 데이터 로딩 중...`);
-    
+    console.log(`종목 ${symbol} 차트 데이터를 로딩합니다.`);
+
     fetch(`http://localhost:3000/api/chart/${symbol}`)
         .then(response => {
             if (!response.ok) {
@@ -253,57 +222,52 @@ function loadStockChart(symbol) {
             return response.json();
         })
         .then(result => {
-            console.log('📈 차트 데이터 응답:', result);
-            console.log('📈 result.success:', result.success);
-            console.log('📈 result.data:', result.data);
-            
-            if (result.success && result.data && Array.isArray(result.data)) {
+            console.log('차트 데이터 응답:', result);
+
+            if (result.success && Array.isArray(result.data)) {
                 renderStockChart(result.data, symbol);
-                console.log('✅ 차트 렌더링 완료');
+                console.log('차트 렌더링 완료');
             } else {
-                console.error('❌ 차트 데이터 형식 오류:', result);
-                throw new Error(result.error || '차트 데이터가 없거나 형식이 잘못되었습니다');
+                console.error('차트 데이터 형식 오류:', result);
+                throw new Error(result.error || '차트 데이터가 부족하거나 형식이 잘못되었습니다.');
             }
         })
         .catch(error => {
-            console.error('❌ 차트 로딩 오류:', error);
-            showNotification('❌ 차트 로딩 실패: ' + error.message, 'error');
+            console.error('차트 로딩 오류:', error);
+            showNotification('차트 로딩 실패: ' + error.message, 'error');
         });
 }
 
-// 차트 렌더링 함수
+// 차트 렌더링
 function renderStockChart(chartData, symbol) {
     const ctx = document.getElementById('stockChart');
-    
+
     if (!ctx) {
-        console.error('차트 캔버스를 찾을 수 없습니다');
+        console.error('차트 캔버스를 찾을 수 없습니다.');
         return;
     }
-    
-    // 기존 차트가 있으면 제거
+
     if (stockChartInstance) {
         stockChartInstance.destroy();
     }
-    
-    // 일봉 데이터만 추출 (8자리 날짜 또는 장 마감 시간)
+
+    // 일봉 데이터만 추출 (분봉은 마감 시간만 사용)
     const dailyData = chartData.filter(item => {
         const timeStr = item.date;
-        // 8자리면 일봉 데이터
         if (timeStr.length === 8) {
             return true;
         }
-        // 14자리 분봉 데이터면 장 마감 시간만
         if (timeStr.length === 14) {
             const time = timeStr.slice(8, 12); // HHMM
             return time === '1530';
         }
         return false;
     });
-    
-    // 날짜별로 하나만 남기기 (중복 제거)
+
+    // 날짜별로 하나씩만 유지
     const uniqueDailyData = [];
     const seenDates = new Set();
-    
+
     for (const item of dailyData) {
         const dateKey = item.date.slice(0, 8); // YYYYMMDD
         if (!seenDates.has(dateKey)) {
@@ -311,45 +275,29 @@ function renderStockChart(chartData, symbol) {
             uniqueDailyData.push(item);
         }
     }
-    
-    // 최대 720개 (720일 = 약 2년)
+
     const limitedData = uniqueDailyData.slice(-720);
-    
-    // 데이터를 날짜 오름차순으로 정렬 (오래된 것부터)
     const sortedData = [...limitedData].reverse();
-    
-    // 날짜와 종가 데이터 추출
+
     const labels = sortedData.map(item => {
         const dateStr = item.date;
-        // 분봉 데이터 (14자리): YYYYMMDDHHMMSS
-        if (dateStr.length === 14) {
-            return `${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
-        }
-        // 일봉 데이터 (8자리): YYYYMMDD
         return `${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
     });
-    
+
     const closePrices = sortedData.map(item => item.close);
-    
-    // 가격 변동 확인 (상승/하락 색상)
-    const borderColor = closePrices[closePrices.length - 1] > closePrices[0] 
-        ? 'rgb(255, 99, 132)'  // 하락 - 빨강
-        : 'rgb(75, 192, 192)'; // 상승 - 초록
-    
-    const backgroundColor = closePrices[closePrices.length - 1] > closePrices[0]
-        ? 'rgba(255, 99, 132, 0.1)'
-        : 'rgba(75, 192, 192, 0.1)';
-    
-    // Chart.js로 라인 차트 생성
+    const isUp = closePrices[closePrices.length - 1] >= closePrices[0];
+    const borderColor = isUp ? 'rgb(75, 192, 192)' : 'rgb(255, 99, 132)';
+    const backgroundColor = isUp ? 'rgba(75, 192, 192, 0.1)' : 'rgba(255, 99, 132, 0.1)';
+
     stockChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
+            labels,
             datasets: [{
                 label: '종가 (원)',
                 data: closePrices,
-                borderColor: borderColor,
-                backgroundColor: backgroundColor,
+                borderColor,
+                backgroundColor,
                 tension: 0.3,
                 fill: true,
                 pointRadius: 0,
@@ -376,7 +324,7 @@ function renderStockChart(chartData, symbol) {
                 },
                 title: {
                     display: true,
-                    text: `삼성전자 (${symbol}) - 최근 720일 일봉 차트`,
+                    text: `삼성전자 (${symbol}) - 최근 720거래일 일봉 차트`,
                     font: {
                         size: 18,
                         weight: 'bold'
@@ -433,16 +381,15 @@ function renderStockChart(chartData, symbol) {
     });
 }
 
-// 키보드 단축키
+// 단축키로 새로고침 지원
 document.addEventListener('keydown', function(e) {
-    // Ctrl + R 또는 F5로 데이터 새로고침
     if ((e.ctrlKey && e.key === 'r') || e.key === 'F5') {
         e.preventDefault();
         refreshData();
     }
 });
 
-// 자동 시간 업데이트 (1분마다)
+// 1분마다 시간 업데이트
 setInterval(updateTime, 60000);
 
 // 화면 크기 변경 시 차트 리사이즈
