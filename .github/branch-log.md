@@ -8,3 +8,4 @@
 🌿 Branch feat/17 created for issue #17 - Sat Nov 15 12:42:27 UTC 2025
 🌿 Branch feat/18 created for issue #18 - Sat Nov 15 14:35:39 UTC 2025
 🌿 Branch feat/22 created for issue #22 - Mon Nov 17 01:24:56 UTC 2025
+🌿 Branch feat/26 created for issue #26 - "[FEAT] database 연결" - Sun Nov 30 12:05:55 UTC 2025
