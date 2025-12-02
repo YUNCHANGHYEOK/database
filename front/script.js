@@ -1,4 +1,4 @@
-// 페이지 로드시 시간, 애니메이션 세팅, 초기 데이터 로딩
+// 초기화: 시간 표기, 애니메이션, 네비게이션, 검색, 기본 데이터 로드
 document.addEventListener('DOMContentLoaded', () => {
     updateTime();
     addAnimations();
@@ -9,10 +9,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         refreshData();
         loadStockChart('005930');
-    }, 600);
+    }, 400);
 });
 
-// 현재 시간을 data-last-update 요소에 표시
+// 모든 차트 인스턴스 관리
+const chartInstances = {};
+
+// 현재 시간 표시
 function updateTime() {
     const now = new Date();
     const timeString = now.toLocaleString('ko-KR', {
@@ -29,7 +32,7 @@ function updateTime() {
     });
 }
 
-// 데이터 새로고침 (KRX API 호출)
+// 백엔드에서 데이터 불러오기
 async function refreshData() {
     const refreshButtons = document.querySelectorAll('[data-refresh-button]');
     const stockCards = document.querySelectorAll('.stock-card');
@@ -43,21 +46,21 @@ async function refreshData() {
     try {
         const response = await fetch('http://localhost:3000/api/stocks');
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`HTTP 상태: ${response.status}`);
         }
 
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-            updateStockCardsWithRealData(data);
-            showNotification('KRX API에서 실시간 종목 데이터를 불러왔습니다.');
-        } else if (data.success && Array.isArray(data.stocks) && data.stocks.length > 0) {
-            updateStockCardsWithRealData(data.stocks);
-            showNotification('KRX API에서 실시간 종목 데이터를 불러왔습니다.');
-        } else {
-            throw new Error('주식 데이터가 비어 있습니다.');
+        const payload = await response.json();
+        const data = normalizeStockResponse(payload);
+        if (!data.length) {
+            throw new Error('응답 데이터가 비어 있습니다');
         }
+
+        updateStockCardsWithRealData(data);
+        updateOverviewMetrics(data);
+        updateDetailPanel(data[0]);
+        showNotification('KRX 백엔드에서 최신 데이터를 받아왔습니다.');
     } catch (error) {
-        showNotification('KRX API 호출 실패: ' + error.message, 'error');
+        showNotification('API 호출 실패: ' + error.message, 'error');
         displayAPIError(error.message);
     } finally {
         updateTime();
@@ -69,38 +72,106 @@ async function refreshData() {
     }
 }
 
-// KRX API 응답으로 주식 카드 업데이트 (ka10001)
+// 백엔드 응답 형태 정리
+function normalizeStockResponse(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (payload?.stocks && Array.isArray(payload.stocks)) return payload.stocks;
+    if (payload?.data && Array.isArray(payload.data)) return payload.data;
+    return [];
+}
+
+// 카드 UI 업데이트
 function updateStockCardsWithRealData(stockData) {
     const stockCards = document.querySelectorAll('.stock-card');
 
     stockCards.forEach((card, index) => {
-        if (!stockData[index]) return;
-
         const stock = stockData[index];
+        if (!stock) return;
+
         const nameElement = card.querySelector('h3');
         const symbolElement = card.querySelector('.symbol');
         const priceElement = card.querySelector('.price');
         const changeElement = card.querySelector('.change');
 
-        const stockName = stock.name || stock.stock_name || '종목명';
+        const stockName = stock.name || stock.stock_name || '종목';
         const stockCode = stock.symbol || stock.stock_code || '';
         const currentPrice = Math.abs(Number(stock.price || stock.current_price || 0));
         const changePrice = Number(stock.change || stock.change_price || 0);
-        const changeRate = Number(stock.changePercent || stock.change_rate || 0);
+        const changeRate = Number(String(stock.changePercent || stock.change_rate || 0).replace('%', ''));
 
         if (nameElement) nameElement.textContent = stockName;
-        if (symbolElement) symbolElement.textContent = stockCode;
-        if (priceElement) priceElement.textContent = `${currentPrice.toLocaleString()}`;
+        if (symbolElement) symbolElement.textContent = stockCode || symbolElement.textContent;
+        if (priceElement) priceElement.textContent = `${currentPrice.toLocaleString()}원`;
 
         if (changeElement) {
             const sign = changeRate >= 0 ? '+' : '';
             changeElement.textContent = `${sign}${changePrice.toLocaleString()} (${sign}${changeRate.toFixed(2)}%)`;
-            changeElement.className = `change ${changeRate >= 0 ? 'positive' : 'negative'}`;
+            changeElement.className = `change ${changeRate > 0 ? 'positive' : changeRate < 0 ? 'negative' : 'neutral'}`;
         }
+
+        // 카드에 세부 정보 저장하여 클릭 시 활용
+        card.dataset.stock = JSON.stringify({
+            ...stock,
+            name: stockName,
+            code: stockCode,
+            price: currentPrice,
+            changePrice,
+            changeRate
+        });
     });
 }
 
-// API 에러 상태 표시
+// 통합 지표 업데이트 (Feat26 추가 필드 반영)
+function updateOverviewMetrics(stocks) {
+    if (!Array.isArray(stocks) || stocks.length === 0) return;
+
+    const totalVolume = stocks.reduce((sum, item) => sum + Math.abs(Number(item.volume || item.trde_qty || 0)), 0);
+    const sortedByChange = [...stocks].sort((a, b) => Number(b.changePercent || b.change_rate || 0) - Number(a.changePercent || a.change_rate || 0));
+    const topMover = sortedByChange[0];
+
+    const volumeElement = document.querySelector('[data-total-volume]');
+    const topMoverElement = document.querySelector('[data-top-mover]');
+    const topMoverDetail = document.querySelector('[data-top-mover-detail]');
+    const topDirPill = document.querySelector('[data-top-change-dir]');
+
+    if (volumeElement) volumeElement.textContent = totalVolume.toLocaleString();
+
+    if (topMoverElement && topMoverDetail && topDirPill) {
+        const rate = Number(topMover.changePercent || topMover.change_rate || 0);
+        const direction = rate >= 0 ? 'positive' : 'negative';
+        topMoverElement.textContent = `${topMover.name || topMover.stock_name || '종목'} (${rate.toFixed(2)}%)`;
+        topMoverDetail.textContent = rate >= 0 ? '상승 우위' : '하락 우위';
+        topDirPill.className = `pill ${direction}`;
+        topDirPill.textContent = rate >= 0 ? '상승' : '하락';
+    }
+}
+
+// 상세 패널 업데이트
+function updateDetailPanel(stock) {
+    if (!stock) return;
+    const name = stock.name || stock.stock_name || '종목';
+    const code = stock.code || stock.symbol || stock.stock_code || '-';
+    const openPrice = Math.abs(Number(stock.openPrice || stock.open_pric || 0));
+    const highPrice = Math.abs(Number(stock.highPrice || stock.high_pric || 0));
+    const lowPrice = Math.abs(Number(stock.lowPrice || stock.low_pric || 0));
+    const volume = Math.abs(Number(stock.volume || stock.trde_qty || 0));
+
+    const nameEl = document.querySelector('[data-detail-name]');
+    const codeEl = document.querySelector('[data-detail-code]');
+    const openEl = document.querySelector('[data-detail-open]');
+    const highEl = document.querySelector('[data-detail-high]');
+    const lowEl = document.querySelector('[data-detail-low]');
+    const volumeEl = document.querySelector('[data-detail-volume]');
+
+    if (nameEl) nameEl.textContent = `${name} / ${code}`;
+    if (codeEl) codeEl.textContent = code || '-';
+    if (openEl) openEl.textContent = openPrice ? `${openPrice.toLocaleString()}원` : '-';
+    if (highEl) highEl.textContent = highPrice ? `${highPrice.toLocaleString()}원` : '-';
+    if (lowEl) lowEl.textContent = lowPrice ? `${lowPrice.toLocaleString()}원` : '-';
+    if (volumeEl) volumeEl.textContent = volume ? volume.toLocaleString() : '-';
+}
+
+// API 오류 표시
 function displayAPIError(message) {
     const stockCards = document.querySelectorAll('.stock-card');
 
@@ -119,7 +190,7 @@ function displayAPIError(message) {
 
 // 카드/기능 섹션 진입 애니메이션
 function addAnimations() {
-    const cards = document.querySelectorAll('.stock-card, .feature-card, .stat-card');
+    const cards = document.querySelectorAll('.stock-card, .feature-card, .stat-card, .panel');
     const observer = new IntersectionObserver(entries => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
@@ -179,36 +250,42 @@ function showNotification(message, type = 'success') {
     }, 2800);
 }
 
-// 차트 인스턴스 관리
-const chartInstances = {};
-
 // 주식 차트 로드
 function loadStockChart(symbol, canvasId = 'stockChart') {
-    if (!symbol) {
-        showNotification('티커를 입력하세요.', 'error');
+    const ticker = extractTicker(symbol || '');
+    if (!ticker) {
+        showNotification('종목 코드를 입력하세요.', 'error');
         return;
     }
-    fetch(`http://localhost:3000/api/chart/${symbol}`)
+
+    fetch(`http://localhost:3000/api/chart/${ticker}`)
         .then(response => {
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                throw new Error(`HTTP 상태: ${response.status}`);
             }
             return response.json();
         })
         .then(result => {
-            if (result.success && Array.isArray(result.data)) {
-                renderStockChart(result.data, symbol, canvasId);
-                showNotification(`${symbol} 차트를 불러왔습니다.`);
-            } else {
-                throw new Error(result.error || '차트 데이터가 부족합니다.');
+            const dataArray =
+                (Array.isArray(result.data) && result.data) ||
+                (result.data && Array.isArray(result.data.data) && result.data.data) ||
+                (Array.isArray(result.output) && result.output) ||
+                (Array.isArray(result.stk_dt_pole_chart_qry) && result.stk_dt_pole_chart_qry) ||
+                [];
+
+            if (result.success === false || dataArray.length === 0) {
+                throw new Error(result.error || '차트 응답이 비어 있습니다');
             }
+
+            renderStockChart(dataArray, ticker, canvasId);
+            showNotification(`${ticker} 차트를 불러왔습니다.`);
         })
         .catch(error => {
             showNotification('차트 로딩 실패: ' + error.message, 'error');
         });
 }
 
-// 차트 렌더링
+// 차트 렌더러
 function renderStockChart(chartData, symbol, canvasId) {
     const ctx = document.getElementById(canvasId);
     if (!ctx) return;
@@ -218,12 +295,10 @@ function renderStockChart(chartData, symbol, canvasId) {
     }
 
     const dailyData = chartData.filter(item => {
-        const timeStr = item.date;
-        if (timeStr.length === 8) {
-            return true;
-        }
+        const timeStr = item.date || item.dt || '';
+        if (timeStr.length === 8) return true;
         if (timeStr.length === 14) {
-            const time = timeStr.slice(8, 12); // HHMM
+            const time = timeStr.slice(8, 12);
             return time === '1530';
         }
         return false;
@@ -232,8 +307,8 @@ function renderStockChart(chartData, symbol, canvasId) {
     const uniqueDailyData = [];
     const seenDates = new Set();
     for (const item of dailyData) {
-        const dateKey = item.date.slice(0, 8);
-        if (!seenDates.has(dateKey)) {
+        const dateKey = (item.date || item.dt || '').slice(0, 8);
+        if (dateKey && !seenDates.has(dateKey)) {
             seenDates.add(dateKey);
             uniqueDailyData.push(item);
         }
@@ -243,11 +318,14 @@ function renderStockChart(chartData, symbol, canvasId) {
     const sortedData = [...limitedData].reverse();
 
     const labels = sortedData.map(item => {
-        const dateStr = item.date;
+        const dateStr = item.date || item.dt || '';
         return `${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
     });
 
-    const closePrices = sortedData.map(item => item.close);
+    const closePrices = sortedData.map(item => {
+        const close = item.close ?? item.cur_prc ?? item.end_prc ?? 0;
+        return Math.abs(Number(String(close).replace(/[^\d.-]/g, '')));
+    });
     const isUp = closePrices[closePrices.length - 1] >= closePrices[0];
     const borderColor = isUp ? 'rgb(58, 160, 255)' : 'rgb(228, 88, 79)';
     const backgroundColor = isUp ? 'rgba(58, 160, 255, 0.12)' : 'rgba(228, 88, 79, 0.12)';
@@ -285,7 +363,7 @@ function renderStockChart(chartData, symbol, canvasId) {
                 },
                 title: {
                     display: true,
-                    text: `${symbol} - 최근 720거래일 일봉`,
+                    text: `${symbol} - 최근 720거래일 종가`,
                     font: { size: 18, weight: 'bold' },
                     padding: 16
                 },
@@ -339,17 +417,11 @@ function wireNavigation() {
             document.querySelectorAll('.page').forEach(page => {
                 page.classList.toggle('is-active', page.getAttribute('data-page') === target);
             });
-            if (target === 'charts') {
-                const input = document.getElementById('chartTicker2');
-                if (input && input.value.trim()) {
-                    loadStockChart(input.value.trim(), 'stockChart2');
-                }
-            }
         });
     });
 }
 
-// 검색 박스와 버튼 이벤트
+// 검색 박스/버튼
 function wireSearch() {
     const searchInput = document.getElementById('tickerSearch');
     const searchButton = document.getElementById('searchButton');
@@ -358,7 +430,7 @@ function wireSearch() {
     const triggerSearch = () => {
         const value = extractTicker(searchInput.value || '');
         if (!value) {
-            showNotification('검색할 티커를 입력하세요.', 'error');
+            showNotification('검색할 종목을 입력하세요.', 'error');
             return;
         }
         switchPage('charts');
@@ -373,7 +445,7 @@ function wireSearch() {
     });
 }
 
-// 티커 입력 버튼 연동
+// 차트 버튼/카드 이벤트
 function wireTickerButtons() {
     const chartLoadButton = document.getElementById('chartLoadButton');
     const chartTickerInput = document.getElementById('chartTicker');
@@ -391,8 +463,12 @@ function wireTickerButtons() {
 
     document.querySelectorAll('.stock-card').forEach(card => {
         card.addEventListener('click', () => {
-            const symbolText = card.querySelector('.symbol')?.textContent || '';
+            const stored = card.dataset.stock ? JSON.parse(card.dataset.stock) : null;
+            const symbolText = stored?.code || stored?.symbol || card.querySelector('.symbol')?.textContent || '';
             const ticker = extractTicker(symbolText);
+            if (stored) {
+                updateDetailPanel(stored);
+            }
             if (ticker) {
                 switchPage('charts');
                 loadStockChart(ticker, 'stockChart2');
@@ -401,7 +477,7 @@ function wireTickerButtons() {
     });
 }
 
-// 페이지 스위처
+// 페이지 전환
 function switchPage(target) {
     const buttons = document.querySelectorAll('[data-page-btn]');
     buttons.forEach(b => {
@@ -412,29 +488,27 @@ function switchPage(target) {
     });
 }
 
-// 티커 문자열 정제
+// 코드 추출
 function extractTicker(text) {
-    return text.replace(/\\.KS|\\.KQ/gi, '').replace(/[^0-9A-Za-z]/g, '').trim();
+    return text.replace(/\.KS|\.KQ/gi, '').replace(/[^0-9A-Za-z]/g, '').trim();
 }
 
-// 키보드 새로고침 단축키
+// 새로고침 단축키
 document.addEventListener('keydown', function(e) {
-    if ((e.ctrlKey && e.key === 'r') || e.key === 'F5') {
+    if ((e.ctrlKey && e.key.toLowerCase() === 'r') || e.key === 'F5') {
         e.preventDefault();
         refreshData();
     }
 });
 
-// 1분마다 시간 업데이트
+// 1분마다 시간 갱신
 setInterval(updateTime, 60000);
 
-// 화면 크기 변경 시 차트 리사이즈
+// 창 크기 변경 시 차트 리사이즈
 let resizeTimeout;
 window.addEventListener('resize', function() {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(function() {
-        if (stockChartInstance) {
-            stockChartInstance.resize();
-        }
+        Object.values(chartInstances).forEach(chart => chart?.resize && chart.resize());
     }, 250);
 });
