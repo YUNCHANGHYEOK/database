@@ -1,15 +1,4 @@
-"""
-Fetch daily OHLC data from Kiwoom REST API, compute RSI, and export to CSV.
-
-Usage:
-  python fetch_rsi.py 005930 --period 14 --rows 200
-
-Environment variables:
-  KIWOOM_APP_KEY       Kiwoom issued app key
-  KIWOOM_SECRET_KEY    Kiwoom issued secret key
-  KIWOOM_MODE          paper | live (default: paper, 모의투자 기준)
-  KIWOOM_BASE_URL      Optional override (paper 기본: https://mockapi.kiwoom.com)
-"""
+"""Fetch daily OHLC data from Kiwoom REST API, compute RSI, and export to CSV."""
 
 from __future__ import annotations
 
@@ -148,6 +137,7 @@ def compute_rsi(ohlc: List[Dict], period: int) -> List[Dict]:
         rsi_rows.append(
             {
                 "date": ohlc[idx]["date"],
+                "open": ohlc[idx]["open"],
                 "close": ohlc[idx]["close"],
                 "rsi": round(rsi, 2),
                 "avg_gain": round(avg_gain, 4),
@@ -162,7 +152,7 @@ def save_csv(symbol: str, rows: List[Dict]) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     file_path = OUTPUT_DIR / f"rsi_{symbol}_{timestamp}.csv"
-    fieldnames = ["date", "close", "rsi", "avg_gain", "avg_loss"]
+    fieldnames = ["date", "open", "close", "rsi", "avg_gain", "avg_loss"]
 
     with file_path.open("w", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
