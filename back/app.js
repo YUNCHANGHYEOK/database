@@ -79,11 +79,53 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   
-  // 기본 페이지
+  // 정적 파일 서빙 (CSS, JS)
+  if (req.url === "/style.css") {
+    const fs = require('fs');
+    const path = require('path');
+    const cssPath = path.join(__dirname, '../front/style.css');
+    try {
+      const css = fs.readFileSync(cssPath, 'utf8');
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      res.writeHead(200);
+      res.end(css);
+    } catch (error) {
+      res.writeHead(404);
+      res.end('CSS not found');
+    }
+    return;
+  }
+
+  if (req.url === "/script.js") {
+    const fs = require('fs');
+    const path = require('path');
+    const jsPath = path.join(__dirname, '../front/script.js');
+    try {
+      const js = fs.readFileSync(jsPath, 'utf8');
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.writeHead(200);
+      res.end(js);
+    } catch (error) {
+      res.writeHead(404);
+      res.end('JS not found');
+    }
+    return;
+  }
+  
+  // 기본 페이지 - front/index.html 서빙
   if (req.url === "/") {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.writeHead(200);
-    res.end(`
+    const fs = require('fs');
+    const path = require('path');
+    const htmlPath = path.join(__dirname, '../front/index.html');
+    try {
+      const html = fs.readFileSync(htmlPath, 'utf8');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.writeHead(200);
+      res.end(html);
+    } catch (error) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.writeHead(200);
+      res.end(`
       <!DOCTYPE html>
       <html>
       <head>
@@ -329,6 +371,7 @@ const server = http.createServer(async (req, res) => {
       </body>
       </html>
     `);
+    }
     return;
   }
   

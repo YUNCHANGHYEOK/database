@@ -23,10 +23,10 @@
                 <p class="nav-label">화면</p>
                 <button class="nav-item is-active" data-page-btn data-target="overview">요약 보기</button>
                 <button class="nav-item" data-page-btn data-target="charts">차트 집중</button>
+                <button class="nav-item" data-page-btn data-target="backtest">백테스팅</button>
             </div>
             <div class="sidebar-card">
                 <p class="muted">업데이트 <span data-last-update>대기 중...</span></p>
-                <button class="ghost-button" data-refresh-button onclick="refreshData()">데이터 새로고침</button>
             </div>
         </aside>
 
@@ -38,39 +38,72 @@
                     <p class="muted">Feat26 백엔드 응답 필드와 연동 완료</p>
                 </div>
                 <div class="topbar-actions">
-                    <div class="search-box">
-                        <input id="tickerSearch" type="text" placeholder="종목코드나 이름 검색" aria-label="차트 검색">
-                    </div>
-                    <button class="primary-btn" id="searchButton">차트 이동</button>
                     <span class="status-pill">서버 3000번 포트</span>
                 </div>
             </div>
 
             <section class="page is-active" data-page="overview">
+                <!-- 데이터 수집 패널 -->
+                <div class="panel data-collection-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">데이터 관리</p>
+                            <h2>주식 데이터 수집</h2>
+                        </div>
+                        <span class="pill outline">Kiwoom API</span>
+                    </div>
+                    <div class="collection-form">
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label for="collectSymbol">종목 코드</label>
+                                <input id="collectSymbol" type="text" placeholder="예: 005930" value="005930">
+                            </div>
+                            <div class="input-group">
+                                <label for="collectStartDate">시작일</label>
+                                <input id="collectStartDate" type="text" placeholder="20240101 또는 2024-01-01">
+                            </div>
+                            <div class="input-group">
+                                <label for="collectEndDate">종료일</label>
+                                <input id="collectEndDate" type="text" placeholder="20240301 또는 2024-03-01">
+                            </div>
+                            <button class="primary-btn collect-btn" onclick="collectData()">
+                                <span class="btn-text">수집 시작</span>
+                                <span class="btn-loading" style="display: none;">⏳ 수집 중...</span>
+                            </button>
+                        </div>
+                        <div class="progress-container" style="display: none;">
+                            <div class="progress-bar">
+                                <span style="width: 0%;"></span>
+                            </div>
+                            <p class="progress-text">데이터 수집 중...</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid cards-row">
                     <div class="stat-card highlight">
                         <div class="card-top">
                             <p class="muted">마지막 업데이트</p>
-                            <span class="pill outline">실시간</span>
+                            <span class="pill outline">로컬 DB</span>
                         </div>
                         <p class="value" data-last-update>대기 중...</p>
-                        <p class="muted">백엔드 발행 시점과 동기화</p>
+                        <p class="muted">데이터 수집 완료 시점</p>
                     </div>
                     <div class="stat-card">
                         <div class="card-top">
-                            <p class="muted">총 거래량</p>
-                            <span class="pill outline">3개 종목 합산</span>
+                            <p class="muted">데이터 상태</p>
+                            <span class="pill outline">준비됨</span>
                         </div>
-                        <p class="value" data-total-volume>0</p>
-                        <p class="muted">Feat26 volume, open/high/low 필드 반영</p>
+                        <p class="value" data-total-volume>-</p>
+                        <p class="muted">DB에서 로드</p>
                     </div>
                     <div class="stat-card">
                         <div class="card-top">
-                            <p class="muted">상승/하락 선두</p>
-                            <span class="pill positive" data-top-change-dir>상승</span>
+                            <p class="muted">종목 정보</p>
+                            <span class="pill positive" data-top-change-dir">분석</span>
                         </div>
-                        <p class="value" data-top-mover>-</p>
-                        <p class="muted" data-top-mover-detail>변동률 기준</p>
+                        <p class="value" data-top-mover>삼성전자</p>
+                        <p class="muted" data-top-mover-detail>005930</p>
                     </div>
                 </div>
 
@@ -78,40 +111,21 @@
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">관심 종목</p>
-                            <h2>실시간 카드</h2>
+                            <h2>삼성전자 (005930)</h2>
                         </div>
                         <div class="chip-group">
-                            <button class="chip is-active">KRX API</button>
-                            <button class="chip" data-refresh-button onclick="refreshData()">다시 불러오기</button>
+                            <button class="chip is-active">로컬 DB</button>
                         </div>
                     </div>
                     <div class="stock-grid" id="stockGrid">
                         <div class="stock-card">
                             <div class="card-meta">
-                                <p class="symbol">005930.KS</p>
+                                <p class="symbol">005930</p>
                                 <span class="tag">반도체</span>
                             </div>
                             <h3>삼성전자</h3>
-                            <p class="price">-</p>
-                            <p class="change neutral">대기 중</p>
-                        </div>
-                        <div class="stock-card">
-                            <div class="card-meta">
-                                <p class="symbol">000660.KS</p>
-                                <span class="tag">메모리</span>
-                            </div>
-                            <h3>SK하이닉스</h3>
-                            <p class="price">-</p>
-                            <p class="change neutral">대기 중</p>
-                        </div>
-                        <div class="stock-card">
-                            <div class="card-meta">
-                                <p class="symbol">035420.KS</p>
-                                <span class="tag">플랫폼</span>
-                            </div>
-                            <h3>네이버</h3>
-                            <p class="price">-</p>
-                            <p class="change neutral">대기 중</p>
+                            <p class="price">데이터 수집 필요</p>
+                            <p class="change neutral">DB에서 로드됨</p>
                         </div>
                     </div>
                 </div>
@@ -120,10 +134,9 @@
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">요약 차트</p>
-                            <h2>최근 720봉 흐름</h2>
+                            <h2>주가 데이터 차트</h2>
                         </div>
                         <div class="chart-controls">
-                            <input id="chartTicker" class="ticker-input" type="text" placeholder="예: 005930" aria-label="차트 종목 코드">
                             <button class="secondary-btn" id="chartLoadButton">차트 새로고침</button>
                         </div>
                     </div>
@@ -133,21 +146,19 @@
                         </div>
                         <div class="chart-side">
                             <div class="info-card soft">
-                                <h3 data-detail-name>집계 정보</h3>
+                                <h3>데이터 정보</h3>
                                 <ul class="mini-list">
-                                    <li><span>종목 코드</span><span data-detail-code>-</span></li>
-                                    <li><span>시가</span><span data-detail-open>-</span></li>
-                                    <li><span>고가</span><span data-detail-high>-</span></li>
-                                    <li><span>저가</span><span data-detail-low>-</span></li>
-                                    <li><span>거래량</span><span data-detail-volume>-</span></li>
+                                    <li><span>종목 코드</span><span>005930</span></li>
+                                    <li><span>데이터 소스</span><span>MySQL DB</span></li>
+                                    <li><span>지표</span><span>RSI 포함</span></li>
                                 </ul>
                             </div>
                             <div class="info-card">
-                                <h3>체크 리스트</h3>
+                                <h3>사용 방법</h3>
                                 <ul class="mini-list">
-                                    <li>720봉 기준 중장기 추세</li>
-                                    <li>Feat26 응답 구조(시가/고가/저가/거래량) 반영</li>
-                                    <li>차트 클릭 시 상세로 이동</li>
+                                    <li>데이터 수집으로 DB 업데이트</li>
+                                    <li>차트에서 시각적 분석</li>
+                                    <li>백테스팅으로 전략 검증</li>
                                 </ul>
                             </div>
                         </div>
@@ -160,11 +171,10 @@
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">차트 집중</p>
-                            <h2>원하는 종목 바로 보기</h2>
+                            <h2>주가 차트 분석</h2>
                         </div>
                         <div class="chart-controls">
-                            <input id="chartTicker2" class="ticker-input" type="text" placeholder="예: 005930" aria-label="차트 종목 코드 입력">
-                            <button class="primary-btn" id="chartLoadButton2">불러오기</button>
+                            <button class="primary-btn" id="chartLoadButton2">차트 불러오기</button>
                             <button class="secondary-btn" onclick="switchPage('overview')">요약으로</button>
                         </div>
                     </div>
@@ -174,18 +184,131 @@
                         </div>
                         <div class="chart-side">
                             <div class="info-card soft">
-                                <h3>차트 사용 팁</h3>
+                                <h3>차트 정보</h3>
                                 <ul class="mini-list">
-                                    <li>응답이 없을 때는 새로고침으로 복구</li>
-                                    <li>종목 카드 클릭 시 자동 전환</li>
-                                    <li>거래량 변화는 우상단 알림으로 확인</li>
+                                    <li>시가/종가 동시 표시</li>
+                                    <li>RSI 지표 포함</li>
+                                    <li>MySQL DB 연동</li>
                                 </ul>
                             </div>
                             <div class="info-card">
                                 <h3>백엔드 상태</h3>
-                                <p class="muted">Feat26 적용: 토큰 재사용 · 응답 필드 확장</p>
+                                <p class="muted">데이터 수집 API 연동</p>
                                 <p class="muted">로컬 3000 포트 기준으로 호출</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="page" data-page="backtest">
+                <!-- 백테스팅 설정 패널 -->
+                <div class="panel backtest-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">전략 테스트</p>
+                            <h2>백테스팅 시뮬레이션</h2>
+                        </div>
+                        <span class="pill outline">RSI 기반</span>
+                    </div>
+                    <div class="backtest-form">
+                        <div class="form-row backtest-inputs">
+                            <div class="input-group">
+                                <label for="backtestSymbol">종목 코드</label>
+                                <input id="backtestSymbol" type="text" placeholder="005930" value="005930">
+                            </div>
+                            <div class="input-group">
+                                <label for="initialCash">초기 자본금 (원)</label>
+                                <input id="initialCash" type="number" placeholder="10000000" value="10000000">
+                            </div>
+                            <div class="input-group">
+                                <label for="buyPrice">매수 기준가 (원)</label>
+                                <input id="buyPrice" type="number" placeholder="50000" value="50000">
+                            </div>
+                            <div class="input-group">
+                                <label for="sellPrice">매도 기준가 (원)</label>
+                                <input id="sellPrice" type="number" placeholder="55000" value="55000">
+                            </div>
+                            <button class="primary-btn backtest-btn" onclick="runBacktest()">
+                                <span class="btn-text">백테스트 실행</span>
+                                <span class="btn-loading" style="display: none;">⏳ 계산 중...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 백테스팅 결과 -->
+                <div id="backtestResults" style="display: none;">
+                    <!-- 결과 요약 카드 -->
+                    <div class="grid cards-row">
+                        <div class="stat-card highlight">
+                            <div class="card-top">
+                                <p class="muted">최종 수익</p>
+                                <span class="pill" id="profitPill">결과</span>
+                            </div>
+                            <p class="value" id="profitValue">-</p>
+                            <p class="muted" id="profitRate">-</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="card-top">
+                                <p class="muted">초기 자본금</p>
+                            </div>
+                            <p class="value" id="initialCashValue">-</p>
+                            <p class="muted">투자 원금</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="card-top">
+                                <p class="muted">최종 자산</p>
+                            </div>
+                            <p class="value" id="finalCashValue">-</p>
+                            <p class="muted">현금 + 주식</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="card-top">
+                                <p class="muted">총 거래 횟수</p>
+                            </div>
+                            <p class="value" id="totalTradesValue">-</p>
+                            <p class="muted">매수/매도 합계</p>
+                        </div>
+                    </div>
+
+                    <!-- 거래 내역 테이블 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <p class="eyebrow">상세 내역</p>
+                                <h2>거래 이력</h2>
+                            </div>
+                            <button class="secondary-btn" onclick="exportTrades()">CSV 다운로드</button>
+                        </div>
+                        <div class="trade-table-container">
+                            <table class="trade-table" id="tradeTable">
+                                <thead>
+                                    <tr>
+                                        <th>날짜</th>
+                                        <th>유형</th>
+                                        <th>가격</th>
+                                        <th>수량</th>
+                                        <th>금액</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tradeTableBody">
+                                    <!-- 거래 내역이 여기 추가됨 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 수익률 차트 -->
+                    <div class="panel chart-wrapper">
+                        <div class="panel-header">
+                            <div>
+                                <p class="eyebrow">성과 분석</p>
+                                <h2>자산 변화 추이</h2>
+                            </div>
+                        </div>
+                        <div class="chart-area">
+                            <canvas id="backtestChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -194,12 +317,12 @@
             <section class="cta">
                 <div class="cta-card">
                     <div>
-                        <p class="eyebrow">데이터 새로고침</p>
-                        <h2>최신 흐름을 즉시 반영</h2>
-                        <p>버튼 한 번으로 카드·차트·지표를 모두 다시 불러옵니다.</p>
+                        <p class="eyebrow">백테스팅 시스템</p>
+                        <h2>RSI 기반 매매 전략 검증</h2>
+                        <p>데이터 수집 후 백테스팅 메뉴에서 전략을 테스트하세요.</p>
                     </div>
                     <div class="cta-actions">
-                        <button onclick="refreshData()" data-refresh-button class="primary-btn">지금 요청</button>
+                        <button onclick="switchPage('backtest')" class="primary-btn">백테스트 시작</button>
                         <p class="update-info">업데이트: <span data-last-update>대기 중...</span></p>
                     </div>
                 </div>
@@ -210,6 +333,9 @@
     <footer class="footer">
         <p>&copy; 2025 KRX 맥동 - 실시간 현황판</p>
     </footer>
+
+    <!-- 토스트 알림 컨테이너 -->
+    <div id="toastContainer" class="toast-container"></div>
 
     <script src="script.js"></script>
 </body>
