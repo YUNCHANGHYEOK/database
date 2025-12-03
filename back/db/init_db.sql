@@ -4,15 +4,19 @@ CREATE DATABASE IF NOT EXISTS stock_database DEFAULT CHARACTER SET utf8mb4 COLLA
 
 USE stock_database;
 
--- 삼성전자 일봉 데이터
+-- 주식 일봉 데이터 (RSI 포함, 다종목 지원)
 CREATE TABLE IF NOT EXISTS stock_prices (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    symbol VARCHAR(20) NOT NULL,
     date DATE NOT NULL,
     open DECIMAL(10,2) NOT NULL,
-    high DECIMAL(10,2) NOT NULL,
-    low DECIMAL(10,2) NOT NULL,
     close DECIMAL(10,2) NOT NULL,
-    UNIQUE KEY (date)
+    rsi DECIMAL(5,2),
+    avg_gain DECIMAL(10,4),
+    avg_loss DECIMAL(10,4),
+    UNIQUE KEY (symbol, date),
+    INDEX idx_symbol (symbol),
+    INDEX idx_date (date)
 );
 
 -- 백테스팅 결과

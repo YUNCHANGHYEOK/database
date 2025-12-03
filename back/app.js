@@ -69,10 +69,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 // 백테스팅 로직
-async function runBacktest(initialCash, buyPrice, sellPrice) {
-  // DB에서 삼성전자 데이터 조회
+async function runBacktest(initialCash, buyPrice, sellPrice, symbol = '005930') {
+  // DB에서 해당 종목 데이터 조회
   const [rows] = await db.pool.query(
-    'SELECT date, open, close FROM stock_prices ORDER BY date'
+    'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ? ORDER BY date',
+    [symbol]
   );
   
   let cash = initialCash;

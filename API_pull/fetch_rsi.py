@@ -16,8 +16,8 @@ import requests
 DEFAULT_PAPER_URL = "https://mockapi.kiwoom.com"
 DEFAULT_LIVE_URL = "https://openapi.kiwoom.com"  # 실계좌 사용 시 필요에 따라 수정
 
-APP_KEY = os.getenv("KIWOOM_APP_KEY", "PwdbpffkSvnHD2YX3BghGpGt-6k-YNS5emdTuj7obC4")
-SECRET_KEY = os.getenv("KIWOOM_SECRET_KEY", "8BxwlX_LK_eR7gIm8WPOJbx7KSCAKoKH8datKIgzAKM")
+APP_KEY = os.getenv("KIWOOM_APP_KEY", "O3kJjNLr_qpv4UaI_dlJcu4NZf_8Q4AIGXMu2UZr5WE")
+SECRET_KEY = os.getenv("KIWOOM_SECRET_KEY", "AVTWCe2Wi6h4HX3q3oly0FN2Gq5VsvWNz_W7M9c0kNY")
 MODE = os.getenv("KIWOOM_MODE", "paper").lower()
 BASE_URL = os.getenv("KIWOOM_BASE_URL") or (DEFAULT_PAPER_URL if MODE == "paper" else DEFAULT_LIVE_URL)
 OUTPUT_DIR = Path(__file__).parent
