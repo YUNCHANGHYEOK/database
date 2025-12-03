@@ -18,9 +18,9 @@ DEFAULT_LIVE_URL = "https://openapi.kiwoom.com"  # 실계좌 사용 시 필요�
 
 APP_KEY = os.getenv("KIWOOM_APP_KEY", "O3kJjNLr_qpv4UaI_dlJcu4NZf_8Q4AIGXMu2UZr5WE")
 SECRET_KEY = os.getenv("KIWOOM_SECRET_KEY", "AVTWCe2Wi6h4HX3q3oly0FN2Gq5VsvWNz_W7M9c0kNY")
-MODE = os.getenv("KIWOOM_MODE", "paper").lower()
+MODE = os.getenv("KIWOOM_MODE", "paper").lower()  # 모의투자로 복구
 BASE_URL = os.getenv("KIWOOM_BASE_URL") or (DEFAULT_PAPER_URL if MODE == "paper" else DEFAULT_LIVE_URL)
-OUTPUT_DIR = Path(__file__).parent
+OUTPUT_DIR = Path(__file__).parent / "data"  # data 폴더에 저장
 
 
 class KiwoomAPIError(Exception):
@@ -45,11 +45,13 @@ def get_token() -> str:
     return token
 
 
-def fetch_daily_ohlc(token: str, symbol: str, *, base_date: str | None, rows: int) -> List[Dict]:
+def fetch_daily_ohlc(token: str, symbol: str, *, base_date: str | None, rows: int, start_date: str | None = None, end_date: str | None = None) -> List[Dict]:
     """
     Request daily OHLC data (ka10081) and return a list sorted by date asc.
     base_date: YYYYMMDD string. If None, today's date is used by the API.
     rows: limit the number of rows to keep from the API response.
+    start_date: YYYYMMDD string. Filter data from this date.
+    end_date: YYYYMMDD string. Filter data up to this date.
     """
     url = f"{BASE_URL}/api/dostk/chart"
     today = dt.date.today()
@@ -103,10 +105,12 @@ def fetch_daily_ohlc(token: str, symbol: str, *, base_date: str | None, rows: in
 
     # Sort by date ascending to ensure RSI is calculated chronologically
     parsed.sort(key=lambda row: row["date"])
-    return parsed[:rows]
+    
+    # Return all data for RSI calculation (filtering will happen after RSI computation)
+    return parsed[-rows:] if len(parsed) > rows else parsed
 
 
-def compute_rsi(ohlc: List[Dict], period: int) -> List[Dict]:
+def compute_rsi(ohlc: List[Dict], period: int, start_date: str | None = None, end_date: str | None = None) -> List[Dict]:
     if period < 2:
         raise ValueError("RSI period must be at least 2.")
     if len(ohlc) <= period:
@@ -145,6 +149,18 @@ def compute_rsi(ohlc: List[Dict], period: int) -> List[Dict]:
             }
         )
 
+    # Filter by date range after RSI calculation
+    if start_date or end_date:
+        filtered = []
+        for row in rsi_rows:
+            date = row["date"]
+            if start_date and date < start_date:
+                continue
+            if end_date and date > end_date:  # > 는 유지 (종료일 포함하려면 API에서 충분한 데이터 필요)
+                continue
+            filtered.append(row)
+        return filtered
+
     return rsi_rows
 
 
@@ -178,11 +194,23 @@ def main() -> None:
         default=None,
         help="Base date in YYYYMMDD (defaults to today on server).",
     )
+    parser.add_argument(
+        "--start-date",
+        dest="start_date",
+        default=None,
+        help="Start date in YYYYMMDD for filtering.",
+    )
+    parser.add_argument(
+        "--end-date",
+        dest="end_date",
+        default=None,
+        help="End date in YYYYMMDD for filtering.",
+    )
     args = parser.parse_args()
 
     token = get_token()
-    ohlc = fetch_daily_ohlc(token, args.symbol, base_date=args.base_date, rows=args.rows)
-    rsi_rows = compute_rsi(ohlc, args.period)
+    ohlc = fetch_daily_ohlc(token, args.symbol, base_date=args.base_date, rows=args.rows, start_date=args.start_date, end_date=args.end_date)
+    rsi_rows = compute_rsi(ohlc, args.period, start_date=args.start_date, end_date=args.end_date)
     csv_path = save_csv(args.symbol, rsi_rows)
     print(f"Saved {len(rsi_rows)} RSI rows to {csv_path}")
 

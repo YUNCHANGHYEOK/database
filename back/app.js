@@ -12,13 +12,46 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   
-  // 주식 데이터 조회 API
-  if (req.url === "/api/stock-data" && req.method === "GET") {
+  // 데이터 수집 API
+  if (req.url === "/api/fetch-data" && req.method === "POST") {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { symbol, startDate, endDate } = JSON.parse(body);
+        const result = await fetchAndSaveData(symbol, startDate, endDate);
+        res.writeHead(200);
+        res.end(JSON.stringify(result));
+      } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // 주식 데이터 조회 API (기간 필터링 지원)
+  if (req.url.startsWith("/api/stock-data") && req.method === "GET") {
     try {
-      const [rows] = await db.pool.query(
-        'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ? ORDER BY date',
-        ['005930']
-      );
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const startDate = url.searchParams.get('startDate');
+      const endDate = url.searchParams.get('endDate');
+      
+      let query = 'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ?';
+      let params = ['005930'];
+      
+      if (startDate) {
+        query += ' AND date >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        query += ' AND date <= ?';
+        params.push(endDate);
+      }
+      
+      query += ' ORDER BY date';
+      
+      const [rows] = await db.pool.query(query, params);
       res.writeHead(200);
       res.end(JSON.stringify(rows));
     } catch (error) {
@@ -70,12 +103,24 @@ const server = http.createServer(async (req, res) => {
           input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; width: 150px; }
           button { padding: 10px 20px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; }
           button:hover { background: #0052a3; }
-          #result { background: #f8f9fa; padding: 15px; border-radius: 6px; margin-top: 15px; white-space: pre-wrap; }
+          #result, #fetchResult { background: #f8f9fa; padding: 15px; border-radius: 6px; margin-top: 15px; white-space: pre-wrap; }
+          .loading { color: #0066cc; font-weight: bold; }
         </style>
       </head>
       <body>
         <div class="container">
           <h1>📈 삼성전자 (005930) 주가 데이터</h1>
+          
+          <div class="backtest" style="background: #fff3cd; margin-bottom: 20px;">
+            <h2>🔄 데이터 수집</h2>
+            <form id="fetchForm">
+              종목코드: <input type="text" id="symbol" value="005930" placeholder="005930">
+              시작일: <input type="text" id="fetchStartDate" placeholder="2024-01-01 또는 20240101" required>
+              종료일: <input type="text" id="fetchEndDate" placeholder="2024-12-31 또는 20241231" required>
+              <button type="submit">데이터 수집 & DB 저장</button>
+            </form>
+            <div id="fetchResult"></div>
+          </div>
           
           <div class="stats" id="stats"></div>
           
@@ -102,14 +147,27 @@ const server = http.createServer(async (req, res) => {
         <script>
           let priceChart, rsiChart;
           
-          async function loadData() {
-            const res = await fetch('/api/stock-data');
+          async function loadData(startDate = null, endDate = null) {
+            let url = '/api/stock-data';
+            if (startDate || endDate) {
+              const params = new URLSearchParams();
+              if (startDate) params.append('startDate', startDate);
+              if (endDate) params.append('endDate', endDate);
+              url += '?' + params.toString();
+            }
+            
+            const res = await fetch(url);
             const data = await res.json();
             
             // 통계 표시
             const latest = data[data.length - 1];
             const oldest = data[0];
-            const avgRsi = (data.reduce((sum, d) => sum + (d.rsi || 0), 0) / data.length).toFixed(2);
+            
+            // RSI 값이 있는 데이터만 필터링하여 평균 계산
+            const validRsi = data.filter(d => d.rsi !== null && d.rsi !== undefined);
+            const avgRsi = validRsi.length > 0 
+              ? (validRsi.reduce((sum, d) => sum + parseFloat(d.rsi), 0) / validRsi.length).toFixed(2)
+              : 'N/A';
             
             document.getElementById('stats').innerHTML = \`
               <div class="stat-card">
@@ -191,6 +249,64 @@ const server = http.createServer(async (req, res) => {
               }
             });
           }
+          
+          document.getElementById('fetchForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('fetchResult');
+            
+            let startDate = document.getElementById('fetchStartDate').value.trim();
+            let endDate = document.getElementById('fetchEndDate').value.trim();
+            
+            // 날짜 형식 정규화: YYYYMMDD -> YYYY-MM-DD
+            const formatDate = (date) => {
+              // 이미 YYYY-MM-DD 형식인 경우
+              if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+              // YYYYMMDD 형식인 경우
+              if (/^\d{8}$/.test(date)) {
+                return date.substring(0, 4) + '-' + date.substring(4, 6) + '-' + date.substring(6, 8);
+              }
+              return date;
+            };
+            
+            startDate = formatDate(startDate);
+            endDate = formatDate(endDate);
+            
+            if (!startDate || !endDate) {
+              resultDiv.innerHTML = '<div style="color: red;">❌ 시작일과 종료일을 모두 입력해주세요</div>';
+              return;
+            }
+            
+            if (new Date(startDate) > new Date(endDate)) {
+              resultDiv.innerHTML = '<div style="color: red;">❌ 시작일이 종료일보다 늦습니다</div>';
+              return;
+            }
+            
+            resultDiv.innerHTML = '<div class="loading">⏳ 데이터 수집 중...</div>';
+            
+            const data = {
+              symbol: document.getElementById('symbol').value,
+              startDate: startDate,
+              endDate: endDate
+            };
+            
+            try {
+              const res = await fetch('/api/fetch-data', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+              });
+              const result = await res.json();
+              
+              if (result.success) {
+                resultDiv.innerHTML = \`<div style="color: green;">✅ \${result.message}</div>\`;
+                setTimeout(() => location.reload(), 2000);
+              } else {
+                resultDiv.innerHTML = \`<div style="color: red;">❌ \${result.error}</div>\`;
+              }
+            } catch (error) {
+              resultDiv.innerHTML = \`<div style="color: red;">❌ 오류: \${error.message}</div>\`;
+            }
+          };
           
           document.getElementById('form').onsubmit = async (e) => {
             e.preventDefault();
@@ -304,6 +420,138 @@ async function runBacktest(initialCash, buyPrice, sellPrice, symbol = '005930') 
     totalTrades: trades,
     trades: tradeHistory
   };
+}
+
+// 데이터 수집 및 저장 함수
+async function fetchAndSaveData(symbol, startDate, endDate) {
+  const { spawn } = require('child_process');
+  const fs = require('fs');
+  const path = require('path');
+  
+  console.log('받은 날짜:', { startDate, endDate });
+  
+  // 기간 계산: 시작일부터 종료일까지 일수 + 여유분
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  // 날짜 유효성 검사
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw new Error(`잘못된 날짜 형식: startDate=${startDate}, endDate=${endDate}`);
+  }
+  
+  const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+  const rows = Math.max(daysDiff * 2, 300); // 주말/공휴일 고려하여 2배 + RSI 계산용 14일 여유분
+  
+  console.log('계산된 값:', { daysDiff, rows });
+  
+  // 1. Python 스크립트 실행
+  const pythonScript = path.join(__dirname, '../API_pull/fetch_rsi.py');
+  const args = [pythonScript, symbol, '--rows', rows.toString()];
+  
+  // 날짜 범위 전달 (YYYY-MM-DD -> YYYYMMDD)
+  const startDateFormatted = startDate.replace(/-/g, '');
+  const endDateFormatted = endDate.replace(/-/g, '');
+  args.push('--start-date', startDateFormatted);
+  args.push('--end-date', endDateFormatted);
+  args.push('--base-date', endDateFormatted);
+  
+  console.log('Python 실행:', args.join(' '));
+  
+  const python = spawn('python', args);
+  
+  let csvFileName = '';
+  let outputBuffer = '';
+  
+  return new Promise((resolve, reject) => {
+    python.stdout.on('data', (data) => {
+      const output = data.toString();
+      outputBuffer += output;
+      console.log(output);
+      
+      // CSV 파일명 추출
+      const match = output.match(/rsi_\w+_\d+\.csv/);
+      if (match) {
+        csvFileName = match[0];
+        console.log('CSV 파일명 발견:', csvFileName);
+      }
+    });
+    
+    python.stderr.on('data', (data) => {
+      console.error(`stderr: ${data}`);
+    });
+    
+    python.on('close', async (code) => {
+      if (code !== 0) {
+        reject(new Error(`Python script exited with code ${code}`));
+        return;
+      }
+      
+      // 파일명을 못 찾았으면 출력 전체에서 다시 검색
+      if (!csvFileName) {
+        const match = outputBuffer.match(/rsi_\w+_\d+\.csv/);
+        if (match) {
+          csvFileName = match[0];
+          console.log('출력 버퍼에서 CSV 파일명 발견:', csvFileName);
+        }
+      }
+      
+      if (!csvFileName) {
+        console.error('전체 출력:', outputBuffer);
+        reject(new Error('CSV file name not found in output'));
+        return;
+      }
+      
+      try {
+        // 2. stock_prices 테이블 초기화
+        await db.pool.query('DELETE FROM stock_prices WHERE symbol = ?', [symbol]);
+        
+        // 3. CSV 파일을 DB에 저장
+        const csvPath = path.join(__dirname, '../API_pull/data', csvFileName);
+        console.log('CSV 파일 경로:', csvPath);
+        
+        const content = fs.readFileSync(csvPath, 'utf-8');
+        const lines = content.trim().split(/\r?\n/);  // Windows/Unix 줄바꿈 모두 처리
+        console.log('총 라인 수:', lines.length);
+        
+        const headers = lines[0].split(',');
+        console.log('헤더:', headers);
+        
+        let imported = 0;
+        
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',');
+          const row = {};
+          
+          headers.forEach((header, idx) => {
+            row[header.trim()] = values[idx];
+          });
+          
+          if (!row.date) continue;  // date가 없으면 스킵
+          
+          const dateStr = row.date;
+          const formattedDate = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`;
+          
+          await db.pool.query(
+            `INSERT INTO stock_prices (symbol, date, open, close, rsi, avg_gain, avg_loss) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [symbol, formattedDate, row.open, row.close, row.rsi || null, row.avg_gain || null, row.avg_loss || null]
+          );
+          imported++;
+        }
+        
+        console.log('저장 완료:', imported, '개');
+        
+        resolve({
+          success: true,
+          message: `${symbol} 데이터 ${imported}개 저장 완료`,
+          imported,
+          csvFile: csvFileName
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
 }
 
 server.listen(3000, () => {
