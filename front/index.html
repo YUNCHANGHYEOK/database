@@ -34,7 +34,7 @@
                 <div>
                     <p class="eyebrow">KRX 흐름</p>
                     <h1>KRX 실시간 현황판</h1>
-                    <p class="muted">Feat26 백엔드 응답 필드와 연동 완료</p>
+                    <p class="muted">Feat34 백엔드 변경과 데이터 흐름 반영</p>
                 </div>
                 <div class="topbar-actions">
                     <span class="status-pill">서버 3000번 포트</span>
@@ -117,7 +117,10 @@
                             <h2>주가 데이터 차트</h2>
                         </div>
                         <div class="chart-controls">
+                            <input class="ticker-input date-input" id="chartStartDate" type="text" placeholder="시작일 (YYYY-MM-DD)">
+                            <input class="ticker-input date-input" id="chartEndDate" type="text" placeholder="종료일 (YYYY-MM-DD)">
                             <button class="secondary-btn" id="chartLoadButton">차트 새로고침</button>
+                            <button class="text-btn" id="chartResetButton" type="button">기간 초기화</button>
                         </div>
                     </div>
                     <div class="chart-layout">
@@ -128,9 +131,9 @@
                             <div class="info-card soft">
                                 <h3>데이터 정보</h3>
                                 <ul class="mini-list">
-                                    <li><span>종목 코드</span><span>005930</span></li>
-                                    <li><span>데이터 소스</span><span>MySQL DB</span></li>
-                                    <li><span>지표</span><span>RSI 포함</span></li>
+                                    <li><span>데이터 구간</span><span data-range-text>전체 구간</span></li>
+                                    <li><span>최근 종가</span><span data-latest-close>-</span></li>
+                                    <li><span>평균 RSI</span><span data-avg-rsi>-</span></li>
                                 </ul>
                             </div>
                             <div class="info-card">

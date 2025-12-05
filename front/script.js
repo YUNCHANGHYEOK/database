@@ -6,12 +6,13 @@ document.addEventListener('DOMContentLoaded', () => {
     wireTickerButtons();
 
     setTimeout(() => {
-        loadStockChart('005930', 'stockChart', true);
+        loadStockChart('005930', 'stockChart', true, getChartRangeFromInputs());
     }, 400);
 });
 
 // 모든 차트 인스턴스 관리
 const chartInstances = {};
+let latestDataDateText = '';
 
 // 현재 시간 표시
 function updateTime() {
@@ -25,16 +26,74 @@ function updateTime() {
         second: '2-digit'
     });
 
+    const displayText = latestDataDateText || timeString;
     document.querySelectorAll('[data-last-update]').forEach(element => {
-        element.textContent = timeString;
+        element.textContent = displayText;
     });
 }
 
+function formatDisplayDate(dateValue) {
+    if (!dateValue) return '-';
+    const parsed = new Date(dateValue);
+    if (isNaN(parsed.getTime())) return dateValue;
+    return parsed.toLocaleDateString('ko-KR');
+}
+
+function normalizeDateInput(value) {
+    if (!value) return '';
+    return formatDate(value.trim());
+}
+
+function isValidDateValue(value) {
+    if (!value) return true;
+    const parsed = new Date(value);
+    return !isNaN(parsed.getTime());
+}
+
+function getChartRangeFromInputs() {
+    const startInput = document.getElementById('chartStartDate');
+    const endInput = document.getElementById('chartEndDate');
+    return {
+        startDate: startInput ? normalizeDateInput(startInput.value) : '',
+        endDate: endInput ? normalizeDateInput(endInput.value) : ''
+    };
+}
+
+function syncRangeToInputs(range) {
+    const startInput = document.getElementById('chartStartDate');
+    const endInput = document.getElementById('chartEndDate');
+    if (startInput && range.startDate !== undefined) startInput.value = range.startDate;
+    if (endInput && range.endDate !== undefined) endInput.value = range.endDate;
+}
+
 // 주식 차트 로드 (백엔드 /api/stock-data 사용)
-function loadStockChart(symbol, canvasId = 'stockChart', silent = false) {
+function loadStockChart(symbol, canvasId = 'stockChart', silent = false, range = {}) {
     const ticker = extractTicker(symbol || '005930');
+    const startDate = normalizeDateInput(range.startDate || '');
+    const endDate = normalizeDateInput(range.endDate || '');
     
-    fetch(`http://localhost:3000/api/stock-data`)
+    if ((startDate && !isValidDateValue(startDate)) || (endDate && !isValidDateValue(endDate))) {
+        showToast('날짜 형식 오류', 'YYYY-MM-DD 형식으로 입력해주세요.', 'error');
+        return;
+    }
+
+    if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (start > end) {
+            showToast('기간 오류', '시작일이 종료일보다 늦습니다.', 'error');
+            return;
+        }
+    }
+
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const query = params.toString();
+    
+    const url = query ? `http://localhost:3000/api/stock-data?${query}` : `http://localhost:3000/api/stock-data`;
+    
+    fetch(url)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP 상태: ${response.status}`);
@@ -49,7 +108,7 @@ function loadStockChart(symbol, canvasId = 'stockChart', silent = false) {
                 return;
             }
             renderStockChart(data, ticker, canvasId);
-            updateStatsFromData(data);
+            updateStatsFromData(data, { startDate, endDate });
         })
         .catch(error => {
             if (!silent) {
@@ -59,30 +118,56 @@ function loadStockChart(symbol, canvasId = 'stockChart', silent = false) {
 }
 
 // 통계 업데이트
-function updateStatsFromData(data) {
+function updateStatsFromData(data, range = {}) {
     if (!data || data.length === 0) return;
     
     const latest = data[data.length - 1];
+    const first = data[0];
     const volumeEl = document.querySelector('[data-total-volume]');
     const topMoverEl = document.querySelector('[data-top-mover]');
+    const topMoverDetailEl = document.querySelector('[data-top-mover-detail]');
+    const rangeTextEl = document.querySelector('[data-range-text]');
+    const latestCloseEl = document.querySelector('[data-latest-close]');
+    const avgRsiEl = document.querySelector('[data-avg-rsi]');
     
     if (volumeEl) {
-        volumeEl.textContent = '데이터 로드됨';
+        volumeEl.textContent = `${data.length.toLocaleString()}건`;
     }
     
-    if (topMoverEl) {
-        let rsiValue = 'N/A';
-        // 전체 기간의 평균 RSI 계산
-        const validRsi = data.filter(d => d.rsi !== null && d.rsi !== undefined);
-        if (validRsi.length > 0) {
-            const sum = validRsi.reduce((acc, d) => acc + parseFloat(d.rsi), 0);
-            const avg = sum / validRsi.length;
-            if (!isNaN(avg)) {
-                rsiValue = avg.toFixed(2);
-            }
+    let rsiValue = '-';
+    // 전체 기간의 평균 RSI 계산
+    const validRsi = data.filter(d => d.rsi !== null && d.rsi !== undefined);
+    if (validRsi.length > 0) {
+        const sum = validRsi.reduce((acc, d) => acc + parseFloat(d.rsi), 0);
+        const avg = sum / validRsi.length;
+        if (!isNaN(avg)) {
+            rsiValue = avg.toFixed(2);
         }
-        topMoverEl.textContent = `평균 RSI: ${rsiValue}`;
     }
+
+    const latestDateText = formatDisplayDate(latest?.date);
+    const startDisplay = formatDisplayDate(range.startDate || first?.date);
+    const endDisplay = formatDisplayDate(range.endDate || latest?.date);
+    latestDataDateText = latestDateText;
+
+    if (topMoverEl) {
+        topMoverEl.textContent = `${Number(latest?.close || 0).toLocaleString()}원`;
+    }
+    if (topMoverDetailEl) {
+        topMoverDetailEl.textContent = `RSI ${rsiValue} • ${latestDateText}`;
+    }
+    if (rangeTextEl) {
+        rangeTextEl.textContent = `${startDisplay} ~ ${endDisplay}`;
+    }
+    if (latestCloseEl) {
+        latestCloseEl.textContent = `${Number(latest?.close || 0).toLocaleString()}원`;
+    }
+    if (avgRsiEl) {
+        avgRsiEl.textContent = rsiValue;
+    }
+    document.querySelectorAll('[data-last-update]').forEach(element => {
+        element.textContent = latestDateText;
+    });
 }
 
 // 카드/기능 섹션 진입 애니메이션
@@ -257,14 +342,21 @@ function wireSearch() {
 // 차트 버튼/카드 이벤트
 function wireTickerButtons() {
     const chartLoadButton = document.getElementById('chartLoadButton');
+    const chartResetButton = document.getElementById('chartResetButton');
 
     chartLoadButton?.addEventListener('click', () => {
+        const range = getChartRangeFromInputs();
+        loadStockChart('005930', 'stockChart', false, range);
+    });
+
+    chartResetButton?.addEventListener('click', () => {
+        syncRangeToInputs({ startDate: '', endDate: '' });
         loadStockChart('005930', 'stockChart', true);
     });
 
     document.querySelectorAll('.stock-card').forEach(card => {
         card.addEventListener('click', () => {
-            loadStockChart('005930', 'stockChart', true);
+            loadStockChart('005930', 'stockChart', true, getChartRangeFromInputs());
         });
     });
 }
@@ -380,7 +472,8 @@ async function collectData() {
             
             // 차트 자동 새로고침
             setTimeout(() => {
-                loadStockChart(symbol);
+                syncRangeToInputs({ startDate, endDate });
+                loadStockChart(symbol, 'stockChart', false, { startDate, endDate });
             }, 1000);
         } else {
             throw new Error(result.message || '데이터 수집에 실패했습니다');
