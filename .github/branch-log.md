@@ -9,3 +9,4 @@
 🌿 Branch feat/18 created for issue #18 - Sat Nov 15 14:35:39 UTC 2025
 🌿 Branch feat/22 created for issue #22 - Mon Nov 17 01:24:56 UTC 2025
 🌿 Branch feat/28 created for issue #28 - "[FEAT] csv와 db 연동" - Wed Dec  3 15:24:54 UTC 2025
+🌿 Branch feat/33 created for issue #33 - "[FEAT] 오류 수정" - Fri Dec  5 09:52:54 UTC 2025
