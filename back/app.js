@@ -61,14 +61,47 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 백테스팅 실행 API
+  // 데이터베이스 초기화 API
+  if (req.url === "/api/reset-database" && req.method === "POST") {
+    try {
+      await db.pool.query('DELETE FROM backtest_trades');
+      await db.pool.query('DELETE FROM backtest_results');
+      await db.pool.query('DELETE FROM stock_prices');
+      res.writeHead(200);
+      res.end(JSON.stringify({ success: true, message: '데이터베이스가 초기화되었습니다.' }));
+    } catch (error) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+
+  // 백테스팅 실행 API (가격 기반)
   if (req.url === "/backtest" && req.method === "POST") {
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
         const { initialCash, buyPrice, sellPrice } = JSON.parse(body);
-        const result = await runBacktest(initialCash, buyPrice, sellPrice);
+        const result = await runBacktestPrice(initialCash, buyPrice, sellPrice);
+        res.writeHead(200);
+        res.end(JSON.stringify(result));
+      } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // 백테스팅 실행 API (RSI 기반)
+  if (req.url === "/backtest-rsi" && req.method === "POST") {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { initialCash, buyRSI, sellRSI } = JSON.parse(body);
+        const result = await runBacktestRSI(initialCash, buyRSI, sellRSI);
         res.writeHead(200);
         res.end(JSON.stringify(result));
       } catch (error) {
@@ -379,8 +412,8 @@ const server = http.createServer(async (req, res) => {
   res.end(JSON.stringify({ error: "Not Found" }));
 });
 
-// 백테스팅 로직
-async function runBacktest(initialCash, buyPrice, sellPrice, symbol = '005930') {
+// 백테스팅 로직 (가격 기반)
+async function runBacktestPrice(initialCash, buyPrice, sellPrice, symbol = '005930') {
   // DB에서 해당 종목 데이터 조회
   const [rows] = await db.pool.query(
     'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ? ORDER BY date',
@@ -393,7 +426,22 @@ async function runBacktest(initialCash, buyPrice, sellPrice, symbol = '005930') 
   const tradeHistory = [];
   
   for (const day of rows) {
-    // 매수 조건: 시가가 매수가격 이하이고 현금이 있을 때
+    // 매도 조건: 종가가 매도가격 이상이고 보유주식이 있을 때 (먼저 체크)
+    if (day.close >= sellPrice && shares > 0) {
+      const amount = shares * day.close;
+      cash += amount;
+      tradeHistory.push({
+        date: day.date,
+        type: 'SELL',
+        price: day.close,
+        shares: shares,
+        amount: amount
+      });
+      shares = 0;
+      trades++;
+    }
+    
+    // 매수 조건: 시가가 매수가격 이하이고 주식을 보유하지 않았을 때
     if (day.open <= buyPrice && shares === 0 && cash >= day.open) {
       shares = Math.floor(cash / day.open);
       const amount = shares * day.open;
@@ -406,20 +454,6 @@ async function runBacktest(initialCash, buyPrice, sellPrice, symbol = '005930') 
         shares: shares,
         amount: amount
       });
-    }
-    // 매도 조건: 종가가 매도가격 이상이고 보유주식이 있을 때
-    else if (day.close >= sellPrice && shares > 0) {
-      const amount = shares * day.close;
-      cash += amount;
-      tradeHistory.push({
-        date: day.date,
-        type: 'SELL',
-        price: day.close,
-        shares: shares,
-        amount: amount
-      });
-      shares = 0;
-      trades++;
     }
   }
   
@@ -434,6 +468,101 @@ async function runBacktest(initialCash, buyPrice, sellPrice, symbol = '005930') 
       price: lastPrice,
       shares: shares,
       amount: amount
+    });
+  }
+  
+  const profit = cash - initialCash;
+  
+  // 결과 DB 저장
+  const [result] = await db.pool.query(
+    'INSERT INTO backtest_results (initial_cash, final_cash, total_trades, profit) VALUES (?, ?, ?, ?)',
+    [initialCash, cash, trades, profit]
+  );
+  
+  const backtestId = result.insertId;
+  
+  // 거래 내역 저장
+  for (const trade of tradeHistory) {
+    await db.pool.query(
+      'INSERT INTO backtest_trades (backtest_id, trade_date, trade_type, price, shares, amount) VALUES (?, ?, ?, ?, ?, ?)',
+      [backtestId, trade.date, trade.type, trade.price, trade.shares, trade.amount]
+    );
+  }
+  
+  return {
+    initialCash,
+    finalCash: cash,
+    profit,
+    profitRate: ((profit / initialCash) * 100).toFixed(2) + '%',
+    totalTrades: trades,
+    trades: tradeHistory
+  };
+}
+
+// 백테스팅 로직 (RSI 기반)
+async function runBacktestRSI(initialCash, buyRSI, sellRSI, symbol = '005930') {
+  // DB에서 해당 종목 데이터 조회
+  const [rows] = await db.pool.query(
+    'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ? AND rsi IS NOT NULL ORDER BY date',
+    [symbol]
+  );
+  
+  let cash = initialCash;
+  let shares = 0;
+  let trades = 0;
+  const tradeHistory = [];
+  
+  for (const day of rows) {
+    const rsi = parseFloat(day.rsi);
+    
+    // RSI 값이 유효하지 않으면 스킵
+    if (isNaN(rsi)) continue;
+    
+    // 매수 조건: RSI가 매수 기준 이하이고 현금이 있을 때
+    if (rsi <= buyRSI && shares === 0 && cash >= day.open) {
+      shares = Math.floor(cash / day.open);
+      const amount = shares * day.open;
+      cash -= amount;
+      trades++;
+      tradeHistory.push({
+        date: day.date,
+        type: 'BUY',
+        price: day.open,
+        shares: shares,
+        amount: amount,
+        rsi: rsi
+      });
+    }
+    // 매도 조건: RSI가 매도 기준 이상이고 보유주식이 있을 때
+    else if (rsi >= sellRSI && shares > 0) {
+      const amount = shares * day.close;
+      cash += amount;
+      tradeHistory.push({
+        date: day.date,
+        type: 'SELL',
+        price: day.close,
+        shares: shares,
+        amount: amount,
+        rsi: rsi
+      });
+      shares = 0;
+      trades++;
+    }
+  }
+  
+  // 남은 주식 정리
+  if (shares > 0 && rows.length > 0) {
+    const lastPrice = rows[rows.length - 1].close;
+    const lastRSI = parseFloat(rows[rows.length - 1].rsi);
+    const amount = shares * lastPrice;
+    cash += amount;
+    tradeHistory.push({
+      date: rows[rows.length - 1].date,
+      type: 'SELL',
+      price: lastPrice,
+      shares: shares,
+      amount: amount,
+      rsi: lastRSI
     });
   }
   

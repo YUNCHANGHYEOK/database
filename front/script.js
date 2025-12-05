@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     wireTickerButtons();
 
     setTimeout(() => {
-        loadStockChart('005930');
+        loadStockChart('005930', 'stockChart', true);
     }, 400);
 });
 
@@ -31,7 +31,7 @@ function updateTime() {
 }
 
 // 주식 차트 로드 (백엔드 /api/stock-data 사용)
-function loadStockChart(symbol, canvasId = 'stockChart') {
+function loadStockChart(symbol, canvasId = 'stockChart', silent = false) {
     const ticker = extractTicker(symbol || '005930');
     
     fetch(`http://localhost:3000/api/stock-data`)
@@ -43,13 +43,18 @@ function loadStockChart(symbol, canvasId = 'stockChart') {
         })
         .then(data => {
             if (!data || data.length === 0) {
-                throw new Error('데이터가 없습니다');
+                if (!silent) {
+                    throw new Error('데이터가 없습니다');
+                }
+                return;
             }
             renderStockChart(data, ticker, canvasId);
             updateStatsFromData(data);
         })
         .catch(error => {
-            showToast('차트 로딩 실패', error.message, 'error');
+            if (!silent) {
+                showToast('차트 로딩 실패', error.message, 'error');
+            }
         });
 }
 
@@ -66,7 +71,17 @@ function updateStatsFromData(data) {
     }
     
     if (topMoverEl) {
-        topMoverEl.textContent = `RSI: ${latest.rsi ? latest.rsi.toFixed(2) : 'N/A'}`;
+        let rsiValue = 'N/A';
+        // 전체 기간의 평균 RSI 계산
+        const validRsi = data.filter(d => d.rsi !== null && d.rsi !== undefined);
+        if (validRsi.length > 0) {
+            const sum = validRsi.reduce((acc, d) => acc + parseFloat(d.rsi), 0);
+            const avg = sum / validRsi.length;
+            if (!isNaN(avg)) {
+                rsiValue = avg.toFixed(2);
+            }
+        }
+        topMoverEl.textContent = `평균 RSI: ${rsiValue}`;
     }
 }
 
@@ -242,21 +257,14 @@ function wireSearch() {
 // 차트 버튼/카드 이벤트
 function wireTickerButtons() {
     const chartLoadButton = document.getElementById('chartLoadButton');
-    const chartTickerInput = document.getElementById('chartTicker');
-    const chartLoadButton2 = document.getElementById('chartLoadButton2');
-    const chartTickerInput2 = document.getElementById('chartTicker2');
 
     chartLoadButton?.addEventListener('click', () => {
-        loadStockChart('005930');
-    });
-    chartLoadButton2?.addEventListener('click', () => {
-        loadStockChart('005930', 'stockChart2');
+        loadStockChart('005930', 'stockChart', true);
     });
 
     document.querySelectorAll('.stock-card').forEach(card => {
         card.addEventListener('click', () => {
-            switchPage('charts');
-            loadStockChart('005930', 'stockChart2');
+            loadStockChart('005930', 'stockChart', true);
         });
     });
 }
@@ -396,6 +404,64 @@ async function collectData() {
     }
 }
 
+// 데이터베이스 초기화
+async function resetDatabase() {
+    // 확인 대화상자
+    if (!confirm('⚠️ 정말로 모든 데이터를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.\n- 주가 데이터\n- 백테스팅 결과\n- 거래 내역')) {
+        return;
+    }
+    
+    const resetBtn = document.querySelector('.reset-btn');
+    const btnText = resetBtn.querySelector('.btn-text');
+    const btnLoading = resetBtn.querySelector('.btn-loading');
+    
+    resetBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+    
+    try {
+        const response = await fetch('http://localhost:3000/api/reset-database', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            showToast(
+                '초기화 완료! 🗑️',
+                '모든 데이터가 삭제되었습니다',
+                'success'
+            );
+            
+            // 차트 및 통계 초기화
+            if (chartInstances.stockChart) {
+                chartInstances.stockChart.destroy();
+                delete chartInstances.stockChart;
+            }
+            
+            // 통계 초기화
+            const volumeEl = document.querySelector('[data-total-volume]');
+            const topMoverEl = document.querySelector('[data-top-mover]');
+            if (volumeEl) volumeEl.textContent = '-';
+            if (topMoverEl) topMoverEl.textContent = '-';
+            
+        } else {
+            throw new Error(result.error || '초기화에 실패했습니다');
+        }
+    } catch (error) {
+        showToast(
+            '초기화 실패',
+            error.message || 'API 호출 중 오류가 발생했습니다',
+            'error'
+        );
+    } finally {
+        resetBtn.disabled = false;
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+    }
+}
+
 // 토스트 알림 표시 (향상된 버전)
 function showToast(title, message, type = 'info') {
     const container = document.getElementById('toastContainer');
@@ -430,37 +496,79 @@ function showToast(title, message, type = 'info') {
 // ==================== 백테스팅 기능 ====================
 
 let backtestChartInstance = null;
+let currentBacktestType = 'price'; // 'price' 또는 'rsi'
+
+// 백테스팅 타입 전환
+function switchBacktestType(type) {
+    currentBacktestType = type;
+    
+    // 버튼 활성화 상태 변경
+    document.getElementById('backtestTypePrice').classList.toggle('is-active', type === 'price');
+    document.getElementById('backtestTypeRSI').classList.toggle('is-active', type === 'rsi');
+    
+    // 폼 표시/숨김
+    document.getElementById('priceBacktestForm').style.display = type === 'price' ? 'block' : 'none';
+    document.getElementById('rsiBacktestForm').style.display = type === 'rsi' ? 'block' : 'none';
+}
 
 // 백테스트 실행
-async function runBacktest() {
-    const symbolInput = document.getElementById('backtestSymbol');
-    const initialCashInput = document.getElementById('initialCash');
-    const buyPriceInput = document.getElementById('buyPrice');
-    const sellPriceInput = document.getElementById('sellPrice');
-    const backtestBtn = document.querySelector('.backtest-btn');
-    const btnText = backtestBtn.querySelector('.btn-text');
-    const btnLoading = backtestBtn.querySelector('.btn-loading');
+async function runBacktest(type) {
     const resultsSection = document.getElementById('backtestResults');
+    let backtestBtn, btnText, btnLoading;
+    let requestData, apiUrl;
     
-    const symbol = symbolInput.value.trim();
-    const initialCash = Number(initialCashInput.value);
-    const buyPrice = Number(buyPriceInput.value);
-    const sellPrice = Number(sellPriceInput.value);
-    
-    // 유효성 검사
-    if (!symbol) {
-        showToast('종목 코드 필요', '종목 코드를 입력하세요', 'error');
-        return;
-    }
-    
-    if (initialCash <= 0 || buyPrice <= 0 || sellPrice <= 0) {
-        showToast('금액 오류', '올바른 금액을 입력하세요', 'error');
-        return;
-    }
-    
-    if (sellPrice <= buyPrice) {
-        showToast('가격 설정 오류', '매도가는 매수가보다 높아야 합니다', 'error');
-        return;
+    if (type === 'price') {
+        // 가격 기반 백테스팅
+        backtestBtn = document.querySelector('#priceBacktestForm .backtest-btn');
+        btnText = backtestBtn.querySelector('.btn-text');
+        btnLoading = backtestBtn.querySelector('.btn-loading');
+        
+        const initialCash = Number(document.getElementById('initialCash').value);
+        const buyPrice = Number(document.getElementById('buyPrice').value);
+        const sellPrice = Number(document.getElementById('sellPrice').value);
+        
+        // 유효성 검사
+        if (initialCash <= 0 || buyPrice <= 0 || sellPrice <= 0) {
+            showToast('금액 오류', '올바른 금액을 입력하세요', 'error');
+            return;
+        }
+        
+        if (sellPrice <= buyPrice) {
+            showToast('가격 설정 오류', '매도가는 매수가보다 높아야 합니다', 'error');
+            return;
+        }
+        
+        requestData = { initialCash, buyPrice, sellPrice };
+        apiUrl = 'http://localhost:3000/backtest';
+        
+    } else {
+        // RSI 기반 백테스팅
+        backtestBtn = document.querySelector('#rsiBacktestForm .backtest-btn');
+        btnText = backtestBtn.querySelector('.btn-text');
+        btnLoading = backtestBtn.querySelector('.btn-loading');
+        
+        const initialCash = Number(document.getElementById('initialCashRSI').value);
+        const buyRSI = Number(document.getElementById('buyRSI').value);
+        const sellRSI = Number(document.getElementById('sellRSI').value);
+        
+        // 유효성 검사
+        if (initialCash <= 0) {
+            showToast('금액 오류', '올바른 금액을 입력하세요', 'error');
+            return;
+        }
+        
+        if (buyRSI < 0 || buyRSI > 100 || sellRSI < 0 || sellRSI > 100) {
+            showToast('RSI 범위 오류', 'RSI는 0~100 사이의 값이어야 합니다', 'error');
+            return;
+        }
+        
+        if (sellRSI <= buyRSI) {
+            showToast('RSI 설정 오류', '매도 RSI는 매수 RSI보다 높아야 합니다', 'error');
+            return;
+        }
+        
+        requestData = { initialCash, buyRSI, sellRSI };
+        apiUrl = 'http://localhost:3000/backtest-rsi';
     }
     
     // UI 상태 변경
@@ -469,10 +577,10 @@ async function runBacktest() {
     btnLoading.style.display = 'inline';
     
     try {
-        const response = await fetch('http://localhost:3000/backtest', {
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initialCash, buyPrice, sellPrice })
+            body: JSON.stringify(requestData)
         });
         
         if (!response.ok) {
@@ -482,7 +590,7 @@ async function runBacktest() {
         const result = await response.json();
         
         // 결과 표시
-        displayBacktestResults(result);
+        displayBacktestResults(result, type);
         resultsSection.style.display = 'block';
         
         // 성공 알림
@@ -510,7 +618,7 @@ async function runBacktest() {
 }
 
 // 백테스트 결과 표시
-function displayBacktestResults(result) {
+function displayBacktestResults(result, type) {
     const profit = result.profit || 0;
     const profitRate = result.profitRate || '0%';
     const initialCash = result.initialCash || 0;
@@ -543,12 +651,13 @@ function displayBacktestResults(result) {
     trades.forEach(trade => {
         const row = document.createElement('tr');
         const date = trade.date ? new Date(trade.date).toLocaleDateString('ko-KR') : '-';
-        const type = trade.type || '-';
-        const typeClass = type === 'BUY' ? 'trade-type-buy' : 'trade-type-sell';
-        const typeText = type === 'BUY' ? '매수' : '매도';
+        const tradeType = trade.type || '-';
+        const typeClass = tradeType === 'BUY' ? 'trade-type-buy' : 'trade-type-sell';
+        const typeText = tradeType === 'BUY' ? '매수' : '매도';
         const price = (trade.price || 0).toLocaleString();
         const shares = (trade.shares || 0).toLocaleString();
         const amount = (trade.amount || 0).toLocaleString();
+        const rsi = trade.rsi !== undefined ? Number(trade.rsi).toFixed(2) : '-';
         
         row.innerHTML = `
             <td>${date}</td>
@@ -556,6 +665,7 @@ function displayBacktestResults(result) {
             <td>${price}원</td>
             <td>${shares}주</td>
             <td>${amount}원</td>
+            <td>${rsi}</td>
         `;
         tableBody.appendChild(row);
     });
@@ -565,7 +675,7 @@ function displayBacktestResults(result) {
 }
 
 // 백테스트 차트 렌더링
-function renderBacktestChart(trades, initialCash) {
+async function renderBacktestChart(trades, initialCash) {
     const ctx = document.getElementById('backtestChart');
     if (!ctx) return;
     
@@ -573,46 +683,104 @@ function renderBacktestChart(trades, initialCash) {
         backtestChartInstance.destroy();
     }
     
-    // 자산 변화 계산
-    let currentCash = initialCash;
-    let currentShares = 0;
-    const assetHistory = [{ date: '시작', value: initialCash }];
-    
-    trades.forEach(trade => {
-        if (trade.type === 'BUY') {
-            currentCash -= trade.amount;
-            currentShares += trade.shares;
-        } else {
-            currentCash += trade.amount;
-            currentShares -= trade.shares;
+    // DB에서 전체 주가 데이터 가져오기
+    let stockData = [];
+    try {
+        const response = await fetch('http://localhost:3000/api/stock-data');
+        if (response.ok) {
+            stockData = await response.json();
         }
-        
-        const totalAsset = currentCash + (currentShares * trade.price);
-        const date = trade.date ? new Date(trade.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '-';
-        assetHistory.push({ date, value: totalAsset });
+    } catch (error) {
+        console.error('주가 데이터 로드 실패:', error);
+    }
+    
+    // 거래 날짜를 Map으로 변환 (빠른 조회)
+    const tradeMap = new Map();
+    trades.forEach(trade => {
+        if (trade.date) {
+            // 날짜를 정규화 (YYYY-MM-DD 형식)
+            const tradeDate = new Date(trade.date);
+            const dateKey = `${tradeDate.getFullYear()}-${String(tradeDate.getMonth() + 1).padStart(2, '0')}-${String(tradeDate.getDate()).padStart(2, '0')}`;
+            if (!tradeMap.has(dateKey)) {
+                tradeMap.set(dateKey, []);
+            }
+            tradeMap.get(dateKey).push(trade);
+        }
     });
     
-    const labels = assetHistory.map(h => h.date);
-    const values = assetHistory.map(h => h.value);
+    // 주가 데이터 준비
+    const labels = stockData.map(d => {
+        const date = new Date(d.date);
+        return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+    });
+    const closePrices = stockData.map(d => d.close);
     
-    const finalValue = values[values.length - 1];
-    const isProfit = finalValue >= initialCash;
+    // 매수/매도 포인트 데이터 준비 (전체 배열 생성)
+    const buyPoints = new Array(stockData.length).fill(null);
+    const sellPoints = new Array(stockData.length).fill(null);
+    
+    stockData.forEach((d, index) => {
+        // DB 날짜를 정규화
+        const dbDate = new Date(d.date);
+        const dateKey = `${dbDate.getFullYear()}-${String(dbDate.getMonth() + 1).padStart(2, '0')}-${String(dbDate.getDate()).padStart(2, '0')}`;
+        const tradesOnDate = tradeMap.get(dateKey);
+        
+        if (tradesOnDate) {
+            tradesOnDate.forEach(trade => {
+                if (trade.type === 'BUY') {
+                    buyPoints[index] = trade.price;
+                } else if (trade.type === 'SELL') {
+                    sellPoints[index] = trade.price;
+                }
+            });
+        }
+    });
     
     backtestChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels,
-            datasets: [{
-                label: '총 자산 (원)',
-                data: values,
-                borderColor: isProfit ? 'rgb(31, 182, 120)' : 'rgb(228, 88, 79)',
-                backgroundColor: isProfit ? 'rgba(31, 182, 120, 0.1)' : 'rgba(228, 88, 79, 0.1)',
-                tension: 0.3,
-                fill: true,
-                pointRadius: 5,
-                pointHoverRadius: 8,
-                borderWidth: 3
-            }]
+            datasets: [
+                {
+                    label: '종가',
+                    data: closePrices,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.1,
+                    fill: true,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: 'rgb(59, 130, 246)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    borderWidth: 2,
+                    order: 3
+                },
+                {
+                    label: '매수',
+                    data: buyPoints,
+                    borderColor: 'rgb(31, 182, 120)',
+                    backgroundColor: 'rgb(31, 182, 120)',
+                    pointStyle: 'triangle',
+                    pointRadius: 10,
+                    pointHoverRadius: 14,
+                    showLine: false,
+                    order: 1,
+                    spanGaps: false
+                },
+                {
+                    label: '매도',
+                    data: sellPoints,
+                    borderColor: 'rgb(228, 88, 79)',
+                    backgroundColor: 'rgb(228, 88, 79)',
+                    pointStyle: 'rectRot',
+                    pointRadius: 10,
+                    pointHoverRadius: 14,
+                    showLine: false,
+                    order: 2,
+                    spanGaps: false
+                }
+            ]
         },
         options: {
             responsive: true,
@@ -625,7 +793,7 @@ function renderBacktestChart(trades, initialCash) {
                 },
                 title: {
                     display: true,
-                    text: '백테스팅 자산 변화',
+                    text: '백테스팅 결과 - 매매 시점',
                     font: { size: 18, weight: 'bold' },
                     padding: 16
                 },
@@ -635,8 +803,20 @@ function renderBacktestChart(trades, initialCash) {
                     titleFont: { size: 14 },
                     bodyFont: { size: 13 },
                     callbacks: {
+                        title: function(context) {
+                            const index = context[0].dataIndex;
+                            const date = stockData[index].date;
+                            return new Date(date).toLocaleDateString('ko-KR', { 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                            });
+                        },
                         label: function(context) {
-                            return '자산: ' + context.parsed.y.toLocaleString() + '원';
+                            if (context.dataset.label === '종가') {
+                                return '종가: ' + context.parsed.y.toLocaleString() + '원';
+                            }
+                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString() + '원';
                         }
                     }
                 }
@@ -654,7 +834,12 @@ function renderBacktestChart(trades, initialCash) {
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { font: { size: 11 } }
+                    ticks: { 
+                        font: { size: 11 },
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 30
+                    }
                 }
             }
         }
