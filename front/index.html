@@ -22,7 +22,6 @@
             <div>
                 <p class="nav-label">화면</p>
                 <button class="nav-item is-active" data-page-btn data-target="overview">요약 보기</button>
-                <button class="nav-item" data-page-btn data-target="charts">차트 집중</button>
                 <button class="nav-item" data-page-btn data-target="backtest">백테스팅</button>
             </div>
             <div class="sidebar-card">
@@ -70,6 +69,10 @@
                                 <span class="btn-text">수집 시작</span>
                                 <span class="btn-loading" style="display: none;">⏳ 수집 중...</span>
                             </button>
+                            <button class="danger-btn reset-btn" onclick="resetDatabase()">
+                                <span class="btn-text">🗑️ 데이터 초기화</span>
+                                <span class="btn-loading" style="display: none;">⏳ 초기화 중...</span>
+                            </button>
                         </div>
                         <div class="progress-container" style="display: none;">
                             <div class="progress-bar">
@@ -104,29 +107,6 @@
                         </div>
                         <p class="value" data-top-mover>삼성전자</p>
                         <p class="muted" data-top-mover-detail>005930</p>
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">관심 종목</p>
-                            <h2>삼성전자 (005930)</h2>
-                        </div>
-                        <div class="chip-group">
-                            <button class="chip is-active">로컬 DB</button>
-                        </div>
-                    </div>
-                    <div class="stock-grid" id="stockGrid">
-                        <div class="stock-card">
-                            <div class="card-meta">
-                                <p class="symbol">005930</p>
-                                <span class="tag">반도체</span>
-                            </div>
-                            <h3>삼성전자</h3>
-                            <p class="price">데이터 수집 필요</p>
-                            <p class="change neutral">DB에서 로드됨</p>
-                        </div>
                     </div>
                 </div>
 
@@ -166,41 +146,6 @@
                 </div>
             </section>
 
-            <section class="page" data-page="charts">
-                <div class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">차트 집중</p>
-                            <h2>주가 차트 분석</h2>
-                        </div>
-                        <div class="chart-controls">
-                            <button class="primary-btn" id="chartLoadButton2">차트 불러오기</button>
-                            <button class="secondary-btn" onclick="switchPage('overview')">요약으로</button>
-                        </div>
-                    </div>
-                    <div class="chart-layout">
-                        <div class="chart-area">
-                            <canvas id="stockChart2"></canvas>
-                        </div>
-                        <div class="chart-side">
-                            <div class="info-card soft">
-                                <h3>차트 정보</h3>
-                                <ul class="mini-list">
-                                    <li>시가/종가 동시 표시</li>
-                                    <li>RSI 지표 포함</li>
-                                    <li>MySQL DB 연동</li>
-                                </ul>
-                            </div>
-                            <div class="info-card">
-                                <h3>백엔드 상태</h3>
-                                <p class="muted">데이터 수집 API 연동</p>
-                                <p class="muted">로컬 3000 포트 기준으로 호출</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             <section class="page" data-page="backtest">
                 <!-- 백테스팅 설정 패널 -->
                 <div class="panel backtest-panel">
@@ -209,9 +154,14 @@
                             <p class="eyebrow">전략 테스트</p>
                             <h2>백테스팅 시뮬레이션</h2>
                         </div>
-                        <span class="pill outline">RSI 기반</span>
+                        <div class="chip-group">
+                            <button class="chip is-active" id="backtestTypePrice" onclick="switchBacktestType('price')">가격 기반</button>
+                            <button class="chip" id="backtestTypeRSI" onclick="switchBacktestType('rsi')">RSI 기반</button>
+                        </div>
                     </div>
-                    <div class="backtest-form">
+                    
+                    <!-- 가격 기반 백테스팅 폼 -->
+                    <div class="backtest-form" id="priceBacktestForm">
                         <div class="form-row backtest-inputs">
                             <div class="input-group">
                                 <label for="backtestSymbol">종목 코드</label>
@@ -229,7 +179,33 @@
                                 <label for="sellPrice">매도 기준가 (원)</label>
                                 <input id="sellPrice" type="number" placeholder="55000" value="55000">
                             </div>
-                            <button class="primary-btn backtest-btn" onclick="runBacktest()">
+                            <button class="primary-btn backtest-btn" onclick="runBacktest('price')">
+                                <span class="btn-text">백테스트 실행</span>
+                                <span class="btn-loading" style="display: none;">⏳ 계산 중...</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- RSI 기반 백테스팅 폼 -->
+                    <div class="backtest-form" id="rsiBacktestForm" style="display: none;">
+                        <div class="form-row backtest-inputs">
+                            <div class="input-group">
+                                <label for="backtestSymbolRSI">종목 코드</label>
+                                <input id="backtestSymbolRSI" type="text" placeholder="005930" value="005930">
+                            </div>
+                            <div class="input-group">
+                                <label for="initialCashRSI">초기 자본금 (원)</label>
+                                <input id="initialCashRSI" type="number" placeholder="10000000" value="10000000">
+                            </div>
+                            <div class="input-group">
+                                <label for="buyRSI">매수 RSI (이하)</label>
+                                <input id="buyRSI" type="number" placeholder="40" value="40" min="0" max="100">
+                            </div>
+                            <div class="input-group">
+                                <label for="sellRSI">매도 RSI (이상)</label>
+                                <input id="sellRSI" type="number" placeholder="70" value="70" min="0" max="100">
+                            </div>
+                            <button class="primary-btn backtest-btn" onclick="runBacktest('rsi')">
                                 <span class="btn-text">백테스트 실행</span>
                                 <span class="btn-loading" style="display: none;">⏳ 계산 중...</span>
                             </button>
@@ -290,6 +266,7 @@
                                         <th>가격</th>
                                         <th>수량</th>
                                         <th>금액</th>
+                                        <th>RSI</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tradeTableBody">
@@ -317,12 +294,11 @@
             <section class="cta">
                 <div class="cta-card">
                     <div>
-                        <p class="eyebrow">백테스팅 시스템</p>
-                        <h2>RSI 기반 매매 전략 검증</h2>
-                        <p>데이터 수집 후 백테스팅 메뉴에서 전략을 테스트하세요.</p>
+                        <p class="eyebrow">데이터 분석</p>
+                        <h2>주가 데이터 시각화 및 백테스팅</h2>
+                        <p>데이터를 수집하고 차트로 분석한 후 백테스팅으로 전략을 검증하세요.</p>
                     </div>
                     <div class="cta-actions">
-                        <button onclick="switchPage('backtest')" class="primary-btn">백테스트 시작</button>
                         <p class="update-info">업데이트: <span data-last-update>대기 중...</span></p>
                     </div>
                 </div>
