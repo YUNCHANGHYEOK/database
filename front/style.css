@@ -936,6 +936,40 @@ body {
     font-weight: 700;
 }
 
+/* 비교 패널 */
+.comparison-panel {
+    margin-bottom: 24px;
+}
+
+.comparison-charts {
+    margin-bottom: 24px;
+}
+
+.history-table-container {
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.history-table-container::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.history-table-container::-webkit-scrollbar-track {
+    background: var(--surface);
+    border-radius: 4px;
+}
+
+.history-table-container::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+.history-table-container::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+}
+
 /* 반응형 백테스팅 */
 @media (max-width: 1200px) {
     .backtest-inputs {
