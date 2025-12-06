@@ -150,6 +150,45 @@
             </section>
 
             <section class="page" data-page="backtest">
+                <!-- 백테스팅 결과 비교 대시보드 -->
+                <div class="panel comparison-panel" id="comparisonPanel" style="display: none;">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">성과 분석</p>
+                            <h2>백테스팅 결과 비교</h2>
+                        </div>
+                        <button class="secondary-btn" onclick="clearHistory()">기록 초기화</button>
+                    </div>
+                    
+                    <!-- 비교 차트 -->
+                    <div class="comparison-charts">
+                        <div class="chart-container" style="height: 300px;">
+                            <canvas id="comparisonChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 결과 히스토리 테이블 -->
+                    <div class="history-table-container">
+                        <table class="trade-table">
+                            <thead>
+                                <tr>
+                                    <th>실행 시간</th>
+                                    <th>전략</th>
+                                    <th>초기 자본</th>
+                                    <th>최종 자산</th>
+                                    <th>수익</th>
+                                    <th>수익률</th>
+                                    <th>거래 횟수</th>
+                                    <th>매개변수</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <!-- 히스토리가 여기 추가됨 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- 백테스팅 설정 패널 -->
                 <div class="panel backtest-panel">
                     <div class="panel-header">

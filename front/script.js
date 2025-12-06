@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     addAnimations();
     wireNavigation();
     wireTickerButtons();
+    loadBacktestHistory();
 
     setTimeout(() => {
         loadStockChart('005930', 'stockChart', true, getChartRangeFromInputs());
@@ -13,6 +14,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // 모든 차트 인스턴스 관리
 const chartInstances = {};
 let latestDataDateText = '';
+
+// 백테스팅 결과 히스토리 (최대 10개)
+let backtestHistory = [];
+const MAX_HISTORY = 10;
 
 // 현재 시간 표시
 function updateTime() {
@@ -682,6 +687,9 @@ async function runBacktest(type) {
         
         const result = await response.json();
         
+        // 결과 저장
+        saveBacktestResult(result, type, requestData);
+        
         // 결과 표시
         displayBacktestResults(result, type);
         resultsSection.style.display = 'block';
@@ -966,4 +974,221 @@ function exportTrades() {
     document.body.removeChild(link);
     
     showToast('CSV 다운로드', '거래 내역이 다운로드되었습니다', 'success');
+}
+
+// 백테스팅 결과 저장
+function saveBacktestResult(result, type, params) {
+    const historyItem = {
+        timestamp: new Date().toISOString(),
+        type: type, // 'price' or 'rsi'
+        params: params,
+        result: {
+            initialCash: result.initialCash,
+            finalCash: result.finalCash,
+            profit: result.profit,
+            profitRate: result.profitRate,
+            totalTrades: result.totalTrades
+        }
+    };
+    
+    // 히스토리 배열에 추가 (최신이 앞에)
+    backtestHistory.unshift(historyItem);
+    
+    // 최대 개수 제한
+    if (backtestHistory.length > MAX_HISTORY) {
+        backtestHistory = backtestHistory.slice(0, MAX_HISTORY);
+    }
+    
+    // localStorage에 저장
+    try {
+        localStorage.setItem('backtestHistory', JSON.stringify(backtestHistory));
+    } catch (e) {
+        console.warn('localStorage 저장 실패:', e);
+    }
+    
+    // UI 업데이트
+    updateComparisonPanel();
+}
+
+// 백테스팅 히스토리 로드
+function loadBacktestHistory() {
+    try {
+        const saved = localStorage.getItem('backtestHistory');
+        if (saved) {
+            backtestHistory = JSON.parse(saved);
+            updateComparisonPanel();
+        }
+    } catch (e) {
+        console.warn('localStorage 로드 실패:', e);
+        backtestHistory = [];
+    }
+}
+
+// 비교 패널 업데이트
+function updateComparisonPanel() {
+    const panel = document.getElementById('comparisonPanel');
+    const tableBody = document.getElementById('historyTableBody');
+    
+    if (backtestHistory.length === 0) {
+        panel.style.display = 'none';
+        return;
+    }
+    
+    panel.style.display = 'block';
+    
+    // 테이블 업데이트
+    tableBody.innerHTML = '';
+    backtestHistory.forEach((item, index) => {
+        const row = document.createElement('tr');
+        const timestamp = new Date(item.timestamp).toLocaleString('ko-KR');
+        const strategyLabel = item.type === 'price' ? '가격 기반' : 'RSI 기반';
+        const strategyClass = item.type === 'price' ? 'trade-type-buy' : 'trade-type-sell';
+        
+        let paramsText = '';
+        if (item.type === 'price') {
+            paramsText = `매수: ${item.params.buyPrice?.toLocaleString()}원, 매도: ${item.params.sellPrice?.toLocaleString()}원`;
+        } else {
+            paramsText = `매수 RSI: ${item.params.buyRSI}, 매도 RSI: ${item.params.sellRSI}`;
+        }
+        
+        const profit = item.result.profit || 0;
+        const profitClass = profit >= 0 ? 'trade-type-buy' : 'trade-type-sell';
+        
+        row.innerHTML = `
+            <td>${timestamp}</td>
+            <td class="${strategyClass}">${strategyLabel}</td>
+            <td>${item.result.initialCash.toLocaleString()}원</td>
+            <td>${item.result.finalCash.toLocaleString()}원</td>
+            <td class="${profitClass}">${profit.toLocaleString()}원</td>
+            <td class="${profitClass}">${item.result.profitRate}</td>
+            <td>${item.result.totalTrades}회</td>
+            <td style="font-size: 12px;">${paramsText}</td>
+        `;
+        tableBody.appendChild(row);
+    });
+    
+    // 비교 차트 업데이트
+    updateComparisonChart();
+}
+
+// 비교 차트 렌더링
+function updateComparisonChart() {
+    const ctx = document.getElementById('comparisonChart');
+    if (!ctx) return;
+    
+    // 기존 차트 삭제
+    if (chartInstances.comparisonChart) {
+        chartInstances.comparisonChart.destroy();
+    }
+    
+    // 가격 기반 vs RSI 기반 분리
+    const priceResults = backtestHistory.filter(h => h.type === 'price');
+    const rsiResults = backtestHistory.filter(h => h.type === 'rsi');
+    
+    // 최근 5개만
+    const recentPrice = priceResults.slice(0, 5).reverse();
+    const recentRsi = rsiResults.slice(0, 5).reverse();
+    
+    const labels = [];
+    const priceData = [];
+    const rsiData = [];
+    
+    const maxLength = Math.max(recentPrice.length, recentRsi.length);
+    
+    for (let i = 0; i < maxLength; i++) {
+        labels.push(`#${i + 1}`);
+        
+        if (recentPrice[i]) {
+            const profitRate = parseFloat(recentPrice[i].result.profitRate);
+            priceData.push(profitRate);
+        } else {
+            priceData.push(null);
+        }
+        
+        if (recentRsi[i]) {
+            const profitRate = parseFloat(recentRsi[i].result.profitRate);
+            rsiData.push(profitRate);
+        } else {
+            rsiData.push(null);
+        }
+    }
+    
+    chartInstances.comparisonChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: '가격 기반 수익률 (%)',
+                    data: priceData,
+                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                    borderColor: 'rgb(59, 130, 246)',
+                    borderWidth: 2
+                },
+                {
+                    label: 'RSI 기반 수익률 (%)',
+                    data: rsiData,
+                    backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                    borderColor: 'rgb(139, 92, 246)',
+                    borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { font: { size: 14, weight: 'bold' } }
+                },
+                title: {
+                    display: true,
+                    text: '전략별 수익률 비교 (최근 5회)',
+                    font: { size: 18, weight: 'bold' },
+                    padding: 16
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 27, 45, 0.9)',
+                    padding: 12,
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 13 },
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(15, 27, 45, 0.06)' },
+                    ticks: {
+                        font: { size: 12 },
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+}
+
+// 히스토리 초기화
+function clearHistory() {
+    if (!confirm('모든 백테스팅 기록을 삭제하시겠습니까?')) {
+        return;
+    }
+    
+    backtestHistory = [];
+    localStorage.removeItem('backtestHistory');
+    updateComparisonPanel();
+    showToast('기록 초기화', '모든 백테스팅 기록이 삭제되었습니다', 'success');
 }
