@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KRX 맥동 - 실시간 주식 현황판</title>
+    <title>Plain Backtest - 전략 기반 백테스팅</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="style.css">
@@ -15,8 +15,8 @@
             <div class="logo">
                 <div class="logo-mark" aria-hidden="true">KR</div>
                 <div>
-                    <strong>KRX 맥동</strong>
-                    <p class="muted">실시간 관제판</p>
+                    <strong>Plain Backtest</strong>
+                    <p class="muted">전략 백테스트 허브</p>
                 </div>
             </div>
             <div>
@@ -26,18 +26,22 @@
             </div>
             <div class="sidebar-card">
                 <p class="muted">업데이트 <span data-last-update>대기 중...</span></p>
+                <button class="ghost-button" data-refresh-button onclick="refreshData()">데이터 동기화</button>
             </div>
         </aside>
 
         <div class="main">
             <div class="topbar">
                 <div>
-                    <p class="eyebrow">KRX 흐름</p>
-                    <h1>KRX 실시간 현황판</h1>
-                    <p class="muted">Feat34 백엔드 변경과 데이터 흐름 반영</p>
+                    <p class="eyebrow">Plain Backtest</p>
+                    <h1>RSI 전략 빌더 · 백테스트 대시보드</h1>
+                    <p class="muted">데이터 수집 → 전략 입력 → 즉시 백테스트까지 한 흐름으로 제공합니다.</p>
                 </div>
                 <div class="topbar-actions">
-                    <span class="status-pill">서버 3000번 포트</span>
+                    <div class="search-box">
+                        <input id="quickTicker" type="text" placeholder="종목 코드 입력 (예: 005930)" aria-label="종목 검색">
+                    </div>
+                    <button class="primary-btn" id="quickSearchButton">차트 불러오기</button>
                 </div>
             </div>
 
@@ -49,7 +53,7 @@
                             <p class="eyebrow">데이터 관리</p>
                             <h2>주식 데이터 수집</h2>
                         </div>
-                        <span class="pill outline">Kiwoom API</span>
+                        <span class="pill outline">실데이터 동기화</span>
                     </div>
                     <div class="collection-form">
                         <div class="form-row">
@@ -79,6 +83,24 @@
                                 <span style="width: 0%;"></span>
                             </div>
                             <p class="progress-text">데이터 수집 중...</p>
+                        </div>
+                        <div class="grid two-col" style="margin-top:8px;">
+                            <div class="info-card soft">
+                                <h3>전략 템플릿</h3>
+                                <ul class="mini-list">
+                                    <li><span>저평가 가치</span><span>PER 저점 + RSI 저점</span></li>
+                                    <li><span>모멘텀</span><span>RSI 상향 돌파</span></li>
+                                    <li><span>보수적</span><span>장기 박스권 관망</span></li>
+                                </ul>
+                            </div>
+                            <div class="info-card">
+                                <h3>이용 흐름</h3>
+                                <ul class="mini-list">
+                                    <li>1) 데이터 수집 → 2) RSI 전략 빌더 → 3) 성과 비교</li>
+                                    <li>필요시 CSV 내려받아 공유</li>
+                                    <li>히스토리로 누적 성과 관리</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -194,7 +216,7 @@
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">전략 테스트</p>
-                            <h2>백테스팅 시뮬레이션</h2>
+                            <h2>RSI 전략 빌더</h2>
                         </div>
                         <div class="chip-group">
                             <button class="chip is-active" id="backtestTypePrice" onclick="switchBacktestType('price')">가격 기반</button>
@@ -211,7 +233,14 @@
                             </div>
                             <div class="input-group">
                                 <label for="initialCash">초기 자본금 (원)</label>
-                                <input id="initialCash" type="number" placeholder="10000000" value="10000000">
+                                <div class="seed-row">
+                                    <input id="initialCash" type="number" placeholder="10000000" value="10000000">
+                                    <div class="chip-group slim">
+                                        <button class="chip seed-btn" data-seed="5000000">+500만</button>
+                                        <button class="chip seed-btn" data-seed="10000000">+1,000만</button>
+                                        <button class="chip seed-btn" data-seed="30000000">+3,000만</button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label for="buyPrice">매수 기준가 (원)</label>
@@ -237,11 +266,25 @@
                             </div>
                             <div class="input-group">
                                 <label for="initialCashRSI">초기 자본금 (원)</label>
-                                <input id="initialCashRSI" type="number" placeholder="10000000" value="10000000">
+                                <div class="seed-row">
+                                    <input id="initialCashRSI" type="number" placeholder="10000000" value="10000000">
+                                    <div class="chip-group slim">
+                                        <button class="chip seed-btn" data-seed="5000000" data-target="rsi">+500만</button>
+                                        <button class="chip seed-btn" data-seed="10000000" data-target="rsi">+1,000만</button>
+                                        <button class="chip seed-btn" data-seed="30000000" data-target="rsi">+3,000만</button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label for="buyRSI">매수 RSI (이하)</label>
-                                <input id="buyRSI" type="number" placeholder="40" value="40" min="0" max="100">
+                                <div class="seed-row">
+                                    <input id="buyRSI" type="number" placeholder="40" value="40" min="0" max="100">
+                                    <div class="chip-group slim">
+                                        <button class="chip rsi-preset" data-buy="30" data-sell="60">보수</button>
+                                        <button class="chip rsi-preset" data-buy="40" data-sell="70">기본</button>
+                                        <button class="chip rsi-preset" data-buy="45" data-sell="75">공격</button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label for="sellRSI">매도 RSI (이상)</label>
@@ -349,7 +392,7 @@
     </div>
 
     <footer class="footer">
-        <p>&copy; 2025 KRX 맥동 - 실시간 현황판</p>
+        <p>&copy; 2025 Plain Backtest</p>
     </footer>
 
     <!-- 토스트 알림 컨테이너 -->
@@ -358,3 +401,4 @@
     <script src="script.js"></script>
 </body>
 </html>
+

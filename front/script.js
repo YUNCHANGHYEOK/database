@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     addAnimations();
     wireNavigation();
     wireTickerButtons();
+    wireBacktestHelpers();
+    wireQuickSearch();
     loadBacktestHistory();
 
     setTimeout(() => {
@@ -71,6 +73,48 @@ function syncRangeToInputs(range) {
     if (endInput && range.endDate !== undefined) endInput.value = range.endDate;
 }
 
+// 단일 호출용 데이터 수집
+async function fetchDataForSymbol(symbol, startDate, endDate) {
+    const payload = { symbol, startDate, endDate };
+    const response = await fetch('http://localhost:3000/api/fetch-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+        throw new Error(result.message || '데이터 수집 실패');
+    }
+    return result;
+}
+
+// 전체 전략 실행: 수집 → 차트 → RSI 백테스트
+async function runStrategyFlow() {
+    const symbol = extractTicker(
+        document.getElementById('collectSymbol')?.value ||
+        document.getElementById('quickTicker')?.value ||
+        '005930'
+    );
+    const startDate = formatDate(document.getElementById('collectStartDate')?.value || '');
+    const endDate = formatDate(document.getElementById('collectEndDate')?.value || '');
+
+    if (!symbol || !startDate || !endDate) {
+        showToast('입력 확인', '종목과 기간을 먼저 입력해주세요.', 'error');
+        return;
+    }
+
+    try {
+        showToast('전략 실행', '데이터 수집을 시작합니다.', 'info');
+        await fetchDataForSymbol(symbol, startDate, endDate);
+        syncRangeToInputs({ startDate, endDate });
+        await loadStockChart(symbol, 'stockChart', false, { startDate, endDate });
+        await runBacktest('rsi', { symbol });
+        showToast('완료', '전략 실행이 완료되었습니다.', 'success');
+    } catch (error) {
+        showToast('실행 실패', error.message || '전략 실행 중 오류', 'error');
+    }
+}
+
 // 주식 차트 로드 (백엔드 /api/stock-data 사용)
 function loadStockChart(symbol, canvasId = 'stockChart', silent = false, range = {}) {
     const ticker = extractTicker(symbol || '005930');
@@ -92,13 +136,14 @@ function loadStockChart(symbol, canvasId = 'stockChart', silent = false, range =
     }
 
     const params = new URLSearchParams();
+    if (ticker) params.append('symbol', ticker);
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
     const query = params.toString();
     
     const url = query ? `http://localhost:3000/api/stock-data?${query}` : `http://localhost:3000/api/stock-data`;
     
-    fetch(url)
+    return fetch(url)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP 상태: ${response.status}`);
@@ -366,6 +411,62 @@ function wireTickerButtons() {
     });
 }
 
+// 퀵 검색 및 입력 동기화
+function wireQuickSearch() {
+    const input = document.getElementById('quickTicker');
+    const button = document.getElementById('quickSearchButton');
+
+    const handler = () => {
+        const ticker = extractTicker(input?.value || '');
+        if (!ticker) {
+            showToast('종목 입력', '종목 코드를 입력해주세요.', 'error');
+            return;
+        }
+        const collectInput = document.getElementById('collectSymbol');
+        const backtestInput = document.getElementById('backtestSymbol');
+        const backtestRSIInput = document.getElementById('backtestSymbolRSI');
+        if (collectInput) collectInput.value = ticker;
+        if (backtestInput) backtestInput.value = ticker;
+        if (backtestRSIInput) backtestRSIInput.value = ticker;
+        loadStockChart(ticker, 'stockChart', false, getChartRangeFromInputs());
+    };
+
+    button?.addEventListener('click', handler);
+    input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handler();
+    });
+}
+
+// 시드머니/RSI 프리셋 버튼
+function wireBacktestHelpers() {
+    document.querySelectorAll('.seed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const seed = Number(btn.getAttribute('data-seed') || 0);
+            const target = btn.getAttribute('data-target') === 'rsi' ? 'initialCashRSI' : 'initialCash';
+            const input = document.getElementById(target);
+            if (input) input.value = seed || 0;
+        });
+    });
+
+    document.querySelectorAll('.rsi-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const buy = btn.getAttribute('data-buy');
+            const sell = btn.getAttribute('data-sell');
+            const buyInput = document.getElementById('buyRSI');
+            const sellInput = document.getElementById('sellRSI');
+            if (buyInput && buy) buyInput.value = buy;
+            if (sellInput && sell) sellInput.value = sell;
+        });
+    });
+}
+
+// 데이터 새로고침 (간단 리로드)
+function refreshData() {
+    const symbol = extractTicker(document.getElementById('collectSymbol')?.value || '005930');
+    loadStockChart(symbol, 'stockChart', false, getChartRangeFromInputs());
+    showToast('데이터 확인', '차트를 새로 불러왔습니다.', 'info');
+}
+
 // 페이지 전환
 function switchPage(target) {
     const buttons = document.querySelectorAll('[data-page-btn]');
@@ -610,7 +711,7 @@ function switchBacktestType(type) {
 }
 
 // 백테스트 실행
-async function runBacktest(type) {
+async function runBacktest(type, opts = {}) {
     const resultsSection = document.getElementById('backtestResults');
     let backtestBtn, btnText, btnLoading;
     let requestData, apiUrl;
@@ -621,6 +722,8 @@ async function runBacktest(type) {
         btnText = backtestBtn.querySelector('.btn-text');
         btnLoading = backtestBtn.querySelector('.btn-loading');
         
+        let symbol = extractTicker(document.getElementById('backtestSymbol').value) || '005930';
+        if (opts.symbol) symbol = extractTicker(opts.symbol);
         const initialCash = Number(document.getElementById('initialCash').value);
         const buyPrice = Number(document.getElementById('buyPrice').value);
         const sellPrice = Number(document.getElementById('sellPrice').value);
@@ -636,7 +739,7 @@ async function runBacktest(type) {
             return;
         }
         
-        requestData = { initialCash, buyPrice, sellPrice };
+        requestData = { initialCash, buyPrice, sellPrice, symbol };
         apiUrl = 'http://localhost:3000/backtest';
         
     } else {
@@ -645,6 +748,8 @@ async function runBacktest(type) {
         btnText = backtestBtn.querySelector('.btn-text');
         btnLoading = backtestBtn.querySelector('.btn-loading');
         
+        let symbol = extractTicker(document.getElementById('backtestSymbolRSI').value) || '005930';
+        if (opts.symbol) symbol = extractTicker(opts.symbol);
         const initialCash = Number(document.getElementById('initialCashRSI').value);
         const buyRSI = Number(document.getElementById('buyRSI').value);
         const sellRSI = Number(document.getElementById('sellRSI').value);
@@ -665,7 +770,7 @@ async function runBacktest(type) {
             return;
         }
         
-        requestData = { initialCash, buyRSI, sellRSI };
+        requestData = { initialCash, buyRSI, sellRSI, symbol };
         apiUrl = 'http://localhost:3000/backtest-rsi';
     }
     

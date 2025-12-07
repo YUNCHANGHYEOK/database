@@ -430,6 +430,10 @@ body {
     flex-wrap: wrap;
 }
 
+.chip-group.slim {
+    gap: 6px;
+}
+
 .chip {
     border: 1px solid var(--border);
     background: #fff;
@@ -443,6 +447,12 @@ body {
 .chip.is-active {
     background: var(--accent-soft);
     color: var(--accent-strong);
+}
+
+.seed-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .stock-grid {
@@ -895,6 +905,13 @@ body {
 
 .backtest-btn {
     background: linear-gradient(120deg, var(--neutral), #e09402);
+}
+
+.action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 /* 거래 테이블 */

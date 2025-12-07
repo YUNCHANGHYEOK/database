@@ -34,11 +34,12 @@ const server = http.createServer(async (req, res) => {
   if (req.url.startsWith("/api/stock-data") && req.method === "GET") {
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
+      const symbol = url.searchParams.get('symbol') || '005930';
       const startDate = url.searchParams.get('startDate');
       const endDate = url.searchParams.get('endDate');
       
       let query = 'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ?';
-      let params = ['005930'];
+      let params = [symbol];
       
       if (startDate) {
         query += ' AND date >= ?';
@@ -82,8 +83,8 @@ const server = http.createServer(async (req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
-        const { initialCash, buyPrice, sellPrice } = JSON.parse(body);
-        const result = await runBacktestPrice(initialCash, buyPrice, sellPrice);
+        const { initialCash, buyPrice, sellPrice, symbol } = JSON.parse(body);
+        const result = await runBacktestPrice(initialCash, buyPrice, sellPrice, symbol || '005930');
         res.writeHead(200);
         res.end(JSON.stringify(result));
       } catch (error) {
@@ -100,8 +101,8 @@ const server = http.createServer(async (req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
-        const { initialCash, buyRSI, sellRSI } = JSON.parse(body);
-        const result = await runBacktestRSI(initialCash, buyRSI, sellRSI);
+        const { initialCash, buyRSI, sellRSI, symbol } = JSON.parse(body);
+        const result = await runBacktestRSI(initialCash, buyRSI, sellRSI, symbol || '005930');
         res.writeHead(200);
         res.end(JSON.stringify(result));
       } catch (error) {
