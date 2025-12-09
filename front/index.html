@@ -1,404 +1,403 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plain Backtest - 전략 기반 백테스팅</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>Plain Backtest - 삼성전자 단일 종목 백테스트</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="app-shell">
         <aside class="sidebar">
             <div class="logo">
-                <div class="logo-mark" aria-hidden="true">KR</div>
+                <div class="logo-mark">PB</div>
                 <div>
                     <strong>Plain Backtest</strong>
-                    <p class="muted">전략 백테스트 허브</p>
                 </div>
             </div>
             <div>
-                <p class="nav-label">화면</p>
-                <button class="nav-item is-active" data-page-btn data-target="overview">요약 보기</button>
-                <button class="nav-item" data-page-btn data-target="backtest">백테스팅</button>
+                <p class="nav-label">메뉴</p>
+                <button class="nav-item is-active" data-page-btn data-target="dashboard">대시보드</button>
+                <button class="nav-item" data-page-btn data-target="builder">전략 설정</button>
+                <button class="nav-item" data-page-btn data-target="results">결과 보기</button>
+                <button class="nav-item" data-page-btn data-target="strategies">내 기록</button>
             </div>
             <div class="sidebar-card">
-                <p class="muted">업데이트 <span data-last-update>대기 중...</span></p>
-                <button class="ghost-button" data-refresh-button onclick="refreshData()">데이터 동기화</button>
+                <p class="small muted">삼성전자 단일 종목 전용으로 설계된 백테스트입니다. 3~4번 클릭으로 실행하세요.</p>
+                <button class="ghost-button" data-page-btn data-target="builder">백테스트 시작하기</button>
             </div>
         </aside>
 
-        <div class="main">
+        <main class="main">
             <div class="topbar">
                 <div>
-                    <p class="eyebrow">Plain Backtest</p>
-                    <h1>RSI 전략 빌더 · 백테스트 대시보드</h1>
-                    <p class="muted">데이터 수집 → 전략 입력 → 즉시 백테스트까지 한 흐름으로 제공합니다.</p>
+                    <h1>Plain Backtest</h1>
                 </div>
                 <div class="topbar-actions">
-                    <div class="search-box">
-                        <input id="quickTicker" type="text" placeholder="종목 코드 입력 (예: 005930)" aria-label="종목 검색">
-                    </div>
-                    <button class="primary-btn" id="quickSearchButton">차트 불러오기</button>
+                    <button class="primary-btn" data-page-btn data-target="builder">백테스트 시작하기</button>
+                    <button class="secondary-btn" data-run-quick>기본 값으로 바로 실행</button>
                 </div>
             </div>
 
-            <section class="page is-active" data-page="overview">
-                <!-- 데이터 수집 패널 -->
-                <div class="panel data-collection-panel">
-                    <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">데이터 관리</p>
-                            <h2>주식 데이터 수집</h2>
+            <section class="page is-active" data-page="dashboard">
+                <div class="panel hero-panel">
+                    <div>
+                        <p class="eyebrow">AARRR · 첫 경험 최적화</p>
+                        <h2>단일 종목 백테스트를 1분 안에</h2>
+                        <p class="muted">전략 선택 → 금액/기간 선택 → 실행까지 3~4번의 행동으로 완료됩니다.</p>
+                        <div class="flow-chips">
+                            <span class="pill outline">빠른 실행</span>
+                            <span class="pill outline">전략 2종</span>
+                            <span class="pill outline">결과 반복 테스트</span>
                         </div>
-                        <span class="pill outline">실데이터 동기화</span>
                     </div>
-                    <div class="collection-form">
-                        <div class="form-row">
-                            <div class="input-group">
-                                <label for="collectSymbol">종목 코드</label>
-                                <input id="collectSymbol" type="text" placeholder="예: 005930" value="005930">
-                            </div>
-                            <div class="input-group">
-                                <label for="collectStartDate">시작일</label>
-                                <input id="collectStartDate" type="text" placeholder="20240101 또는 2024-01-01">
-                            </div>
-                            <div class="input-group">
-                                <label for="collectEndDate">종료일</label>
-                                <input id="collectEndDate" type="text" placeholder="20240301 또는 2024-03-01">
-                            </div>
-                            <button class="primary-btn collect-btn" onclick="collectData()">
-                                <span class="btn-text">수집 시작</span>
-                                <span class="btn-loading" style="display: none;">⏳ 수집 중...</span>
-                            </button>
-                            <button class="danger-btn reset-btn" onclick="resetDatabase()">
-                                <span class="btn-text">🗑️ 데이터 초기화</span>
-                                <span class="btn-loading" style="display: none;">⏳ 초기화 중...</span>
-                            </button>
-                        </div>
-                        <div class="progress-container" style="display: none;">
-                            <div class="progress-bar">
-                                <span style="width: 0%;"></span>
-                            </div>
-                            <p class="progress-text">데이터 수집 중...</p>
-                        </div>
-                        <div class="grid two-col" style="margin-top:8px;">
-                            <div class="info-card soft">
-                                <h3>전략 템플릿</h3>
-                                <ul class="mini-list">
-                                    <li><span>저평가 가치</span><span>PER 저점 + RSI 저점</span></li>
-                                    <li><span>모멘텀</span><span>RSI 상향 돌파</span></li>
-                                    <li><span>보수적</span><span>장기 박스권 관망</span></li>
-                                </ul>
-                            </div>
-                            <div class="info-card">
-                                <h3>이용 흐름</h3>
-                                <ul class="mini-list">
-                                    <li>1) 데이터 수집 → 2) RSI 전략 빌더 → 3) 성과 비교</li>
-                                    <li>필요시 CSV 내려받아 공유</li>
-                                    <li>히스토리로 누적 성과 관리</li>
-                                </ul>
-                            </div>
-                        </div>
+                    <div class="hero-actions">
+                        <button class="primary-btn" data-page-btn data-target="builder">백테스트 시작하기</button>
+                        <button class="text-btn" data-page-btn data-target="builder">옵션 먼저 살펴보기</button>
                     </div>
                 </div>
 
-                <div class="grid cards-row">
-                    <div class="stat-card highlight">
-                        <div class="card-top">
-                            <p class="muted">마지막 업데이트</p>
-                            <span class="pill outline">로컬 DB</span>
-                        </div>
-                        <p class="value" data-last-update>대기 중...</p>
-                        <p class="muted">데이터 수집 완료 시점</p>
-                    </div>
-                    <div class="stat-card">
-                        <div class="card-top">
-                            <p class="muted">데이터 상태</p>
-                            <span class="pill outline">준비됨</span>
-                        </div>
-                        <p class="value" data-total-volume>-</p>
-                        <p class="muted">DB에서 로드</p>
-                    </div>
-                    <div class="stat-card">
-                        <div class="card-top">
-                            <p class="muted">종목 정보</p>
-                            <span class="pill positive" data-top-change-dir">분석</span>
-                        </div>
-                        <p class="value" data-top-mover>삼성전자</p>
-                        <p class="muted" data-top-mover-detail>005930</p>
-                    </div>
-                </div>
-
-                <div class="panel chart-wrapper">
+                <div class="panel">
                     <div class="panel-header">
                         <div>
-                            <p class="eyebrow">요약 차트</p>
-                            <h2>주가 데이터 차트</h2>
+                            <p class="eyebrow">최근 실행</p>
+                            <h3>최근 백테스트 3개</h3>
                         </div>
-                        <div class="chart-controls">
-                            <input class="ticker-input date-input" id="chartStartDate" type="text" placeholder="시작일 (YYYY-MM-DD)">
-                            <input class="ticker-input date-input" id="chartEndDate" type="text" placeholder="종료일 (YYYY-MM-DD)">
-                            <button class="secondary-btn" id="chartLoadButton">차트 새로고침</button>
-                            <button class="text-btn" id="chartResetButton" type="button">기간 초기화</button>
-                        </div>
+                        <button class="text-btn" data-page-btn data-target="strategies">내 기록 보기</button>
                     </div>
-                    <div class="chart-layout">
-                        <div class="chart-area">
-                            <canvas id="stockChart"></canvas>
-                        </div>
-                        <div class="chart-side">
-                            <div class="info-card soft">
-                                <h3>데이터 정보</h3>
-                                <ul class="mini-list">
-                                    <li><span>데이터 구간</span><span data-range-text>전체 구간</span></li>
-                                    <li><span>최근 종가</span><span data-latest-close>-</span></li>
-                                    <li><span>평균 RSI</span><span data-avg-rsi>-</span></li>
-                                </ul>
-                            </div>
-                            <div class="info-card">
-                                <h3>사용 방법</h3>
-                                <ul class="mini-list">
-                                    <li>데이터 수집으로 DB 업데이트</li>
-                                    <li>차트에서 시각적 분석</li>
-                                    <li>백테스팅으로 전략 검증</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
+                    <div id="recentBacktests" class="recent-list"></div>
                 </div>
             </section>
 
-            <section class="page" data-page="backtest">
-                <!-- 백테스팅 결과 비교 대시보드 -->
-                <div class="panel comparison-panel" id="comparisonPanel" style="display: none;">
+            <section class="page" data-page="builder">
+                <div class="panel">
                     <div class="panel-header">
                         <div>
-                            <p class="eyebrow">성과 분석</p>
-                            <h2>백테스팅 결과 비교</h2>
+                            <p class="eyebrow">전략 선택</p>
+                            <h3>가격 기반 / RSI 전략</h3>
+                            <p class="muted small">단일 종목 전용. 종목 선택 없이 바로 테스트합니다.</p>
                         </div>
-                        <button class="secondary-btn" onclick="clearHistory()">기록 초기화</button>
-                    </div>
-                    
-                    <!-- 비교 차트 -->
-                    <div class="comparison-charts">
-                        <div class="chart-container" style="height: 300px;">
-                            <canvas id="comparisonChart"></canvas>
+                        <div class="action-row">
+                            <button class="secondary-btn" data-page-btn data-target="dashboard">대시보드</button>
+                            <button class="primary-btn backtest-btn">바로 실행</button>
                         </div>
                     </div>
-                    
-                    <!-- 결과 히스토리 테이블 -->
-                    <div class="history-table-container">
+
+                    <div class="builder-grid strategy-wrap">
+                        <div class="strategy-card is-active" data-select-strategy="price">
+                            <div class="card-top">
+                                <p class="eyebrow">가격 기반 전략</p>
+                                <span class="pill">가격 입력</span>
+                            </div>
+                            <h4>직접 지정한 가격으로 매수/매도</h4>
+                            <p class="muted small">매수·매도 가격을 직접 입력해 시그널을 만듭니다.</p>
+                        </div>
+                        <div class="strategy-card" data-select-strategy="rsi">
+                            <div class="card-top">
+                                <p class="eyebrow">RSI 전략</p>
+                                <span class="pill">모멘텀</span>
+                            </div>
+                            <h4>RSI 과매수/과매도 활용</h4>
+                            <p class="muted small">RSI 지표를 이용해 과매도 구간 매수, 과매수 구간 매도</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="builder-grid">
+                    <form id="priceBacktestForm" class="panel form-stack">
+                        <div class="panel-header">
+                            <div>
+                                <p class="eyebrow">가격 기반 설정</p>
+                                <h3>매수·매도 가격 입력</h3>
+                            </div>
+                            <span class="pill outline">기본값: 매수 60,000 / 매도 66,000</span>
+                        </div>
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label for="buyPrice">매수 가격(원)</label>
+                                <input type="number" id="buyPrice" value="60000" min="1">
+                            </div>
+                            <div class="input-group">
+                                <label for="sellPrice">매도 가격(원)</label>
+                                <input type="number" id="sellPrice" value="66000" min="1">
+                            </div>
+                        </div>
+                        <div class="form-row seed-row">
+                            <label>초기 투자금</label>
+                            <div class="chip-group">
+                                <button type="button" class="chip seed-btn" data-target="price" data-seed="1000000">100만원</button>
+                                <button type="button" class="chip seed-btn" data-target="price" data-seed="3000000">300만원</button>
+                                <button type="button" class="chip seed-btn" data-target="price" data-seed="5000000">500만원</button>
+                                <button type="button" class="chip seed-btn" data-target="price" data-seed="10000000">1000만원</button>
+                            </div>
+                            <input type="number" id="initialCash" placeholder="직접 입력 (원 단위)" value="1000000">
+                        </div>
+                        <div class="form-row date-presets">
+                            <label>기간 선택</label>
+                            <div class="chip-group">
+                                <button type="button" class="chip" data-range="1y">1년</button>
+                                <button type="button" class="chip" data-range="3y">3년</button>
+                                <button type="button" class="chip" data-range="5y">5년</button>
+                                <button type="button" class="chip" data-range="10y">10년</button>
+                                <button type="button" class="chip" data-range="all">전체</button>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label for="builderStartPrice">시작일</label>
+                                    <input type="date" id="builderStartPrice">
+                                </div>
+                                <div class="input-group">
+                                    <label for="builderEndPrice">종료일</label>
+                                    <input type="date" id="builderEndPrice">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <p class="muted small">매수 가격 이하 진입 · 매도 가격 이상 청산으로 시뮬레이션</p>
+                            <div class="action-row">
+                                <button type="button" class="secondary-btn" data-page-btn data-target="dashboard">취소</button>
+                                <button type="button" class="primary-btn backtest-btn">이 가격으로 실행</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <form id="rsiBacktestForm" class="panel form-stack" style="display:none">
+                        <div class="panel-header">
+                            <div>
+                                <p class="eyebrow">RSI 설정</p>
+                                <h3>RSI 기반 과매수·과매도</h3>
+                            </div>
+                            <span class="pill outline">기본값: 기간 14 / 매수 30 / 매도 70</span>
+                        </div>
+                        <div class="form-row">
+                            <div class="input-group">
+                                <label for="rsiPeriod">RSI 기간</label>
+                                <input type="number" id="rsiPeriod" value="14" min="1">
+                            </div>
+                            <div class="input-group">
+                                <label for="buyRSI">매수 기준</label>
+                                <input type="number" id="buyRSI" value="30" min="1" max="100">
+                            </div>
+                            <div class="input-group">
+                                <label for="sellRSI">매도 기준</label>
+                                <input type="number" id="sellRSI" value="70" min="1" max="100">
+                            </div>
+                        </div>
+                        <div class="chip-group">
+                            <button type="button" class="chip rsi-preset" data-buy="25" data-sell="65">완만</button>
+                            <button type="button" class="chip rsi-preset" data-buy="30" data-sell="70">기본</button>
+                            <button type="button" class="chip rsi-preset" data-buy="35" data-sell="75">공격</button>
+                        </div>
+                        <div class="form-row seed-row">
+                            <label>초기 투자금</label>
+                            <div class="chip-group">
+                                <button type="button" class="chip seed-btn" data-target="rsi" data-seed="1000000">100만원</button>
+                                <button type="button" class="chip seed-btn" data-target="rsi" data-seed="3000000">300만원</button>
+                                <button type="button" class="chip seed-btn" data-target="rsi" data-seed="5000000">500만원</button>
+                                <button type="button" class="chip seed-btn" data-target="rsi" data-seed="10000000">1000만원</button>
+                            </div>
+                            <input type="number" id="initialCashRSI" placeholder="직접 입력 (원 단위)" value="1000000">
+                        </div>
+                        <div class="form-row date-presets">
+                            <label>기간 선택</label>
+                            <div class="chip-group">
+                                <button type="button" class="chip" data-range="1y">1년</button>
+                                <button type="button" class="chip" data-range="3y">3년</button>
+                                <button type="button" class="chip" data-range="5y">5년</button>
+                                <button type="button" class="chip" data-range="10y">10년</button>
+                                <button type="button" class="chip" data-range="all">전체</button>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label for="builderStartRSI">시작일</label>
+                                    <input type="date" id="builderStartRSI">
+                                </div>
+                                <div class="input-group">
+                                    <label for="builderEndRSI">종료일</label>
+                                    <input type="date" id="builderEndRSI">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <p class="muted small">매수: RSI가 기준보다 낮을 때 · 매도: RSI가 기준보다 높을 때</p>
+                            <button type="button" class="primary-btn backtest-btn">바로 실행</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section class="page" data-page="results">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">결과 요약</p>
+                        <h3>핵심 성과 지표</h3>
+                    </div>
+                    <div class="action-row">
+                        <button class="secondary-btn" data-page-btn data-target="builder">옵션 수정 후 재실행</button>
+                        <button class="secondary-btn backtest-btn">같은 옵션으로 재실행</button>
+                        <button class="text-btn" data-page-btn data-target="dashboard">새 백테스트</button>
+                    </div>
+                </div>
+                <div id="backtestResults" class="grid cards-row" style="display:none">
+                    <div class="stat-card highlight">
+                        <div class="card-top">
+                            <p class="muted">총 수익</p>
+                            <span class="pill" id="profitPill">수익</span>
+                        </div>
+                        <div class="value" id="profitValue">-</div>
+                        <p class="muted" id="profitRate">-</p>
+                    </div>
+                    <div class="stat-card">
+                        <div class="card-top"><p class="muted">최대낙폭 MDD</p></div>
+                        <div class="value" id="mddValue">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="card-top"><p class="muted">거래 횟수</p></div>
+                        <div class="value" id="tradeCountValue">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="card-top"><p class="muted">승률</p></div>
+                        <div class="value" id="winRateValue">-</div>
+                    </div>
+                </div>
+
+                <div class="chart-layout">
+                    <div class="chart-area">
+                        <div class="panel-header">
+                            <div>
+                                <p class="eyebrow">누적 수익률</p>
+                                <h4>포트폴리오 가치 곡선</h4>
+                            </div>
+                            <button class="text-btn">Buy &amp; Hold 대비</button>
+                        </div>
+                        <canvas id="backtestChart" height="320"></canvas>
+                    </div>
+                    <div class="chart-side">
+                        <div class="info-card">
+                            <p class="eyebrow">전략 설정 요약</p>
+                            <ul id="strategySummary" class="mini-list">
+                                <li><span>전략 유형</span><span>-</span></li>
+                                <li><span>종목</span><span>삼성전자</span></li>
+                                <li><span>테스트 기간</span><span>-</span></li>
+                                <li><span>핵심 파라미터</span><span>-</span></li>
+                                <li><span>초기 투자금</span><span>-</span></li>
+                                <li><span>수수료/슬리피지</span><span>기본 비율 적용</span></li>
+                            </ul>
+                        </div>
+                        <div class="info-card soft">
+                            <p class="eyebrow">다음 행동</p>
+                            <div class="action-row">
+                                <button class="secondary-btn" data-page-btn data-target="builder">옵션 수정</button>
+                                <button class="text-btn backtest-btn">동일 전략 재실행</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">거래 상세</p>
+                            <h3>거래 내역</h3>
+                        </div>
+                    </div>
+                    <div class="trade-table-container">
                         <table class="trade-table">
                             <thead>
                                 <tr>
-                                    <th>실행 시간</th>
-                                    <th>전략</th>
-                                    <th>초기 자본</th>
-                                    <th>최종 자산</th>
-                                    <th>수익</th>
-                                    <th>수익률</th>
-                                    <th>거래 횟수</th>
-                                    <th>매개변수</th>
+                                    <th>날짜</th>
+                                    <th>타입</th>
+                                    <th>체결 가격</th>
+                                    <th>수량</th>
+                                    <th>체결 금액</th>
+                                    <th>RSI</th>
                                 </tr>
                             </thead>
-                            <tbody id="historyTableBody">
-                                <!-- 히스토리가 여기 추가됨 -->
-                            </tbody>
+                            <tbody id="tradeTableBody"></tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- 백테스팅 설정 패널 -->
-                <div class="panel backtest-panel">
+                <div class="panel">
                     <div class="panel-header">
                         <div>
-                            <p class="eyebrow">전략 테스트</p>
-                            <h2>RSI 전략 빌더</h2>
-                        </div>
-                        <div class="chip-group">
-                            <button class="chip is-active" id="backtestTypePrice" onclick="switchBacktestType('price')">가격 기반</button>
-                            <button class="chip" id="backtestTypeRSI" onclick="switchBacktestType('rsi')">RSI 기반</button>
+                            <p class="eyebrow">일별 손익</p>
+                            <h3>일별 수익률 &amp; 포트폴리오 가치</h3>
                         </div>
                     </div>
-                    
-                    <!-- 가격 기반 백테스팅 폼 -->
-                    <div class="backtest-form" id="priceBacktestForm">
-                        <div class="form-row backtest-inputs">
-                            <div class="input-group">
-                                <label for="backtestSymbol">종목 코드</label>
-                                <input id="backtestSymbol" type="text" placeholder="005930" value="005930">
-                            </div>
-                            <div class="input-group">
-                                <label for="initialCash">초기 자본금 (원)</label>
-                                <div class="seed-row">
-                                    <input id="initialCash" type="number" placeholder="10000000" value="10000000">
-                                    <div class="chip-group slim">
-                                        <button class="chip seed-btn" data-seed="5000000">+500만</button>
-                                        <button class="chip seed-btn" data-seed="10000000">+1,000만</button>
-                                        <button class="chip seed-btn" data-seed="30000000">+3,000만</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label for="buyPrice">매수 기준가 (원)</label>
-                                <input id="buyPrice" type="number" placeholder="50000" value="50000">
-                            </div>
-                            <div class="input-group">
-                                <label for="sellPrice">매도 기준가 (원)</label>
-                                <input id="sellPrice" type="number" placeholder="55000" value="55000">
-                            </div>
-                            <button class="primary-btn backtest-btn" onclick="runBacktest('price')">
-                                <span class="btn-text">백테스트 실행</span>
-                                <span class="btn-loading" style="display: none;">⏳ 계산 중...</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- RSI 기반 백테스팅 폼 -->
-                    <div class="backtest-form" id="rsiBacktestForm" style="display: none;">
-                        <div class="form-row backtest-inputs">
-                            <div class="input-group">
-                                <label for="backtestSymbolRSI">종목 코드</label>
-                                <input id="backtestSymbolRSI" type="text" placeholder="005930" value="005930">
-                            </div>
-                            <div class="input-group">
-                                <label for="initialCashRSI">초기 자본금 (원)</label>
-                                <div class="seed-row">
-                                    <input id="initialCashRSI" type="number" placeholder="10000000" value="10000000">
-                                    <div class="chip-group slim">
-                                        <button class="chip seed-btn" data-seed="5000000" data-target="rsi">+500만</button>
-                                        <button class="chip seed-btn" data-seed="10000000" data-target="rsi">+1,000만</button>
-                                        <button class="chip seed-btn" data-seed="30000000" data-target="rsi">+3,000만</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label for="buyRSI">매수 RSI (이하)</label>
-                                <div class="seed-row">
-                                    <input id="buyRSI" type="number" placeholder="40" value="40" min="0" max="100">
-                                    <div class="chip-group slim">
-                                        <button class="chip rsi-preset" data-buy="30" data-sell="60">보수</button>
-                                        <button class="chip rsi-preset" data-buy="40" data-sell="70">기본</button>
-                                        <button class="chip rsi-preset" data-buy="45" data-sell="75">공격</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label for="sellRSI">매도 RSI (이상)</label>
-                                <input id="sellRSI" type="number" placeholder="70" value="70" min="0" max="100">
-                            </div>
-                            <button class="primary-btn backtest-btn" onclick="runBacktest('rsi')">
-                                <span class="btn-text">백테스트 실행</span>
-                                <span class="btn-loading" style="display: none;">⏳ 계산 중...</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 백테스팅 결과 -->
-                <div id="backtestResults" style="display: none;">
-                    <!-- 결과 요약 카드 -->
-                    <div class="grid cards-row">
-                        <div class="stat-card highlight">
-                            <div class="card-top">
-                                <p class="muted">최종 수익</p>
-                                <span class="pill" id="profitPill">결과</span>
-                            </div>
-                            <p class="value" id="profitValue">-</p>
-                            <p class="muted" id="profitRate">-</p>
-                        </div>
-                        <div class="stat-card">
-                            <div class="card-top">
-                                <p class="muted">초기 자본금</p>
-                            </div>
-                            <p class="value" id="initialCashValue">-</p>
-                            <p class="muted">투자 원금</p>
-                        </div>
-                        <div class="stat-card">
-                            <div class="card-top">
-                                <p class="muted">최종 자산</p>
-                            </div>
-                            <p class="value" id="finalCashValue">-</p>
-                            <p class="muted">현금 + 주식</p>
-                        </div>
-                        <div class="stat-card">
-                            <div class="card-top">
-                                <p class="muted">총 거래 횟수</p>
-                            </div>
-                            <p class="value" id="totalTradesValue">-</p>
-                            <p class="muted">매수/매도 합계</p>
-                        </div>
-                    </div>
-
-                    <!-- 거래 내역 테이블 -->
-                    <div class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <p class="eyebrow">상세 내역</p>
-                                <h2>거래 이력</h2>
-                            </div>
-                            <button class="secondary-btn" onclick="exportTrades()">CSV 다운로드</button>
-                        </div>
-                        <div class="trade-table-container">
-                            <table class="trade-table" id="tradeTable">
-                                <thead>
-                                    <tr>
-                                        <th>날짜</th>
-                                        <th>유형</th>
-                                        <th>가격</th>
-                                        <th>수량</th>
-                                        <th>금액</th>
-                                        <th>RSI</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tradeTableBody">
-                                    <!-- 거래 내역이 여기 추가됨 -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- 수익률 차트 -->
-                    <div class="panel chart-wrapper">
-                        <div class="panel-header">
-                            <div>
-                                <p class="eyebrow">성과 분석</p>
-                                <h2>자산 변화 추이</h2>
-                            </div>
-                        </div>
-                        <div class="chart-area">
-                            <canvas id="backtestChart"></canvas>
-                        </div>
+                    <div class="trade-table-container">
+                        <table class="trade-table">
+                            <thead>
+                                <tr>
+                                    <th>날짜</th>
+                                    <th>일별 수익률</th>
+                                    <th>누적 수익률</th>
+                                    <th>포트폴리오 가치</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyTableBody"></tbody>
+                        </table>
                     </div>
                 </div>
             </section>
 
-            <section class="cta">
-                <div class="cta-card">
+            <section class="page" data-page="strategies">
+                <div class="panel-header">
                     <div>
-                        <p class="eyebrow">데이터 분석</p>
-                        <h2>주가 데이터 시각화 및 백테스팅</h2>
-                        <p>데이터를 수집하고 차트로 분석한 후 백테스팅으로 전략을 검증하세요.</p>
+                        <p class="eyebrow">내 기록</p>
+                        <h3>최근 실행 목록</h3>
                     </div>
-                    <div class="cta-actions">
-                        <p class="update-info">업데이트: <span data-last-update>대기 중...</span></p>
+                    <button class="text-btn" data-page-btn data-target="builder">새 백테스트</button>
+                </div>
+                <div id="comparisonPanel" class="comparison-panel" style="display:none">
+                    <div class="comparison-charts">
+                        <p class="muted small">최근 실행한 전략을 한눈에 비교하세요.</p>
+                    </div>
+                    <div class="history-table-container">
+                        <table class="trade-table">
+                            <thead>
+                                <tr>
+                                    <th>실행 시각</th>
+                                    <th>전략</th>
+                                    <th>투자금</th>
+                                    <th>기간</th>
+                                    <th>총 수익</th>
+                                    <th>수익률</th>
+                                    <th>거래 횟수</th>
+                                    <th>주요 파라미터</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody"></tbody>
+                        </table>
                     </div>
                 </div>
+                <div class="panel">
+                    <p class="muted small">전략 저장/삭제/재실행 기능은 프런트에서 상태로 관리합니다.</p>
+                </div>
             </section>
+        </main>
+    </div>
+
+    <div id="backtestLoading" class="loading-overlay">
+        <div class="loading-card">
+            <div class="loading-steps">
+                <div class="step-dot is-active">1</div>
+                <span>가격 데이터를 분석하는 중입니다...</span>
+            </div>
+            <div class="loading-steps">
+                <div class="step-dot">2</div>
+                <span>전략을 적용하는 중입니다...</span>
+            </div>
+            <div class="loading-steps">
+                <div class="step-dot">3</div>
+                <span>수익률을 계산하는 중입니다...</span>
+            </div>
+            <div class="loading-bar"><span></span></div>
+            <p class="muted small">평균 2~5초 내 완료</p>
         </div>
     </div>
 
-    <footer class="footer">
-        <p>&copy; 2025 Plain Backtest</p>
-    </footer>
-
-    <!-- 토스트 알림 컨테이너 -->
-    <div id="toastContainer" class="toast-container"></div>
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
-
