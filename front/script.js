@@ -455,13 +455,30 @@ function renderPriceChart(result) {
     const buys = (result.trades || []).filter(t => (t.type || '').toUpperCase() === 'BUY');
     const sells = (result.trades || []).filter(t => (t.type || '').toUpperCase() === 'SELL');
 
-    // 거래 날짜가 라벨에 없을 경우, 마지막 가격으로 채워서 추가
+    // 거래 날짜가 라벨에 없을 경우, 해당 날짜 이전 가장 가까운 가격(또는 첫 값)을 가져와 채워 넣음
     const tradeDates = [...buys, ...sells].map(t => normalizeDateLabel(t.date)).filter(Boolean);
     const labelSet = new Set(entries.map(e => e.label));
-    const lastPrice = entries.length ? entries[entries.length - 1].value : 0;
+    const priceAtOrBefore = (target, sortedEntries) => {
+        const ts = parseDateSafe(target)?.getTime();
+        if (ts == null || Number.isNaN(ts) || !sortedEntries.length) return 0;
+        let price = sortedEntries[0].value;
+        for (const e of sortedEntries) {
+            const et = parseDateSafe(e.label)?.getTime();
+            if (et == null || Number.isNaN(et)) continue;
+            if (et > ts) break;
+            price = e.value;
+        }
+        return price;
+    };
+    const sortedByDate = [...entries].sort((a, b) => {
+        const da = parseDateSafe(a.label)?.getTime() ?? 0;
+        const db = parseDateSafe(b.label)?.getTime() ?? 0;
+        return da - db;
+    });
     tradeDates.forEach(d => {
         if (!labelSet.has(d)) {
-            entries.push({ label: d, value: lastPrice });
+            const refPrice = priceAtOrBefore(d, sortedByDate);
+            entries.push({ label: d, value: refPrice });
             labelSet.add(d);
         }
     });
@@ -501,11 +518,11 @@ function renderPriceChart(result) {
 
     priceChart = new Chart(ctx, {
         type: 'line',
-            data: {
-                labels: labelSlice,
-                datasets: [
-                    {
-                        label: '종가',
+        data: {
+            labels: labelSlice,
+            datasets: [
+                {
+                    label: '종가',
                     data: pointData,
                     borderColor: '#2f80ed',
                     backgroundColor: gradient,
@@ -513,13 +530,17 @@ function renderPriceChart(result) {
                     tension: 0.25,
                     pointRadius: 0,
                     pointHitRadius: 6,
-                    fill: true
+                    fill: true,
+                    parsing: false,
+                    xAxisID: 'x',
+                    yAxisID: 'priceY'
                 },
                 {
                     type: 'scatter',
                     label: '매수',
                     data: buyPoints,
-                    yAxisID: 'y',
+                    xAxisID: 'x',
+                    yAxisID: 'priceY',
                     backgroundColor: 'rgba(22, 163, 74, 0.9)',
                     borderColor: 'rgba(22, 163, 74, 0.9)',
                     pointRadius: 5,
@@ -530,7 +551,8 @@ function renderPriceChart(result) {
                     type: 'scatter',
                     label: '매도',
                     data: sellPoints,
-                    yAxisID: 'y',
+                    xAxisID: 'x',
+                    yAxisID: 'priceY',
                     backgroundColor: 'rgba(220, 38, 38, 0.9)',
                     borderColor: 'rgba(220, 38, 38, 0.9)',
                     pointRadius: 5,
@@ -544,11 +566,12 @@ function renderPriceChart(result) {
             interaction: { mode: 'index', intersect: false },
             scales: {
                 x: {
+                    type: 'category',
                     ticks: { maxTicksLimit: 10 },
                     grid: { display: false },
                     title: { display: true, text: '조회 기간' }
                 },
-                y: {
+                priceY: {
                     title: { display: true, text: '주가 (원)' },
                     ticks: { callback: v => `${Math.round(Number(v)).toLocaleString()}원` },
                     grid: { color: 'rgba(0,0,0,0.05)' }
