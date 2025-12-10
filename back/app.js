@@ -353,7 +353,10 @@ async function runBacktestRSI({ symbol, startDate, endDate, initialCash, buyRSI,
   const profitRate = ((profit / initialCash) * 100).toFixed(2) + '%';
   const mdd = calcMDD(equity);
   const completed = trades.filter((t) => t.type === 'SELL');
-  const winTrades = completed.filter((t) => t.amount > 0);
+  const winTrades = completed.filter((t) => {
+    const buy = trades.slice(0, trades.indexOf(t)).reverse().find((x) => x.type === 'BUY');
+    return buy ? t.price > buy.price : false;
+  });
   const winRate = completed.length ? ((winTrades.length / completed.length) * 100).toFixed(1) + '%' : '-';
 
   const daily = equity.map((value, idx) => {
