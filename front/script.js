@@ -106,6 +106,7 @@ function runBacktest() {
     simulateStages()
         .then(() => autoFetchData(params))
         .then(() => runBacktestBackend(params))
+        .then(result => attachPriceSeries(result))
         .catch(() => generateMockResult(params))
         .then(result => {
             renderResults(result);
@@ -418,36 +419,43 @@ function renderEquityChart(result) {
     clearChartError();
     const ctx = document.getElementById('backtestChart');
     if (!ctx) return;
-    if (!result.equityData.length || !result.equityLabels.length) {
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js 로드되지 않음, 캔버스 폴백 사용');
+        drawFallbackChart(ctx, result);
+        return;
+    }
+    const labels = ensureSeriesLabels(result);
+    const series = ensureSeriesData(result);
+    if (!series.length || !labels.length) {
         showChartError('차트를 표시할 데이터를 불러오지 못했습니다.');
         if (equityChart) equityChart.destroy();
         return;
     }
     if (equityChart) equityChart.destroy();
 
-    const buyPoints = new Array(result.equityData.length).fill(null);
-    const sellPoints = new Array(result.equityData.length).fill(null);
+    const buyPoints = new Array(series.length).fill(null);
+    const sellPoints = new Array(series.length).fill(null);
     result.trades.forEach(t => {
         const dateKey = (t.date || '').slice(0, 10);
-        const idx = result.equityLabels.findIndex(d => d === dateKey);
+        const idx = labels.findIndex(d => d === dateKey);
         if (idx >= 0) {
-            const pv = result.equityData[idx];
+            const pv = series[idx];
             if (t.type === 'BUY') buyPoints[idx] = pv;
             if (t.type === 'SELL') sellPoints[idx] = pv;
         }
     });
 
-    const minVal = Math.min(...result.equityData);
-    const maxVal = Math.max(...result.equityData);
+    const minVal = Math.min(...series);
+    const maxVal = Math.max(...series);
     const pad = Math.max(1000, (maxVal - minVal) * 0.08);
 
     try {
         equityChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: result.equityLabels,
+                labels,
                 datasets: [
-                    { label: '포트폴리오 가치', data: result.equityData, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.15)', tension: 0.2, fill: true, pointRadius: 0 },
+                    { label: result.priceData?.length ? '종가(설정 기간)' : '포트폴리오 가치', data: series, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.15)', tension: 0.2, fill: true, pointRadius: 2.5, pointHoverRadius: 6, hitRadius: 8 },
                     { label: '매수', data: buyPoints, borderColor: '#16a34a', backgroundColor: '#16a34a', pointStyle: 'triangle', pointRadius: 7, showLine: false },
                     { label: '매도', data: sellPoints, borderColor: '#dc2626', backgroundColor: '#dc2626', pointStyle: 'rectRot', pointRadius: 7, showLine: false }
                 ]
@@ -456,14 +464,36 @@ function renderEquityChart(result) {
                 responsive: true,
                 interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: { display: false },
+                    x: {
+                        display: true,
+                        ticks: { maxTicksLimit: 6 }
+                    },
                     y: {
                         suggestedMin: minVal - pad,
                         suggestedMax: maxVal + pad,
                         ticks: { callback: v => `${v.toLocaleString()}원` }
                     }
                 },
-                plugins: { legend: { display: true } }
+                plugins: {
+                    legend: { display: true },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            title: (ctx) => ctx[0]?.label || '',
+                            label: (ctx) => {
+                                const datasetLabel = ctx.dataset.label || '';
+                                const value = ctx.parsed.y;
+                                if (datasetLabel === '매수' || datasetLabel === '매도') {
+                                    const trade = result.trades.find(t => (t.date || '').slice(0, 10) === ctx.label && t.type === (datasetLabel === '매수' ? 'BUY' : 'SELL'));
+                                    const priceText = trade ? ` (체결가 ${Number(trade.price || 0).toLocaleString()}원)` : '';
+                                    return `${datasetLabel}: ${value.toLocaleString()}원${priceText}`;
+                                }
+                                return `${datasetLabel}: ${value.toLocaleString()}원`;
+                            }
+                        }
+                    }
+                }
             }
         });
     } catch (e) {
@@ -527,11 +557,11 @@ function renderStrategySummary(params, meta = {}) {
     const source = { ...params, ...meta };
     const strategyName = source.strategy || params.strategy;
     items[0].textContent = strategyName;
-    items[1].textContent = source.symbol || source.ticker || source.asset || '개인투자 (단일 종목)';
+    items[1].textContent = '삼성전자';
     const start = source.periodStart || source.startDate || source.start;
     const end = source.periodEnd || source.endDate || source.end;
     items[2].textContent = start && end ? `${start} ~ ${end}` : '최근 구간';
-    if (strategyName === '가격기반') {
+    if (isPriceStrategy(strategyName)) {
         const buy = Number(source.buyPrice ?? params.buyPrice);
         const sell = Number(source.sellPrice ?? params.sellPrice);
         items[3].textContent = `매수 ${buy.toLocaleString()} / 매도 ${sell.toLocaleString()}`;
@@ -578,7 +608,7 @@ function loadHistory() {
             <td>${item.summary.profit.toLocaleString()}원</td>
             <td>${item.summary.profitRate}</td>
             <td>${item.summary.tradeCount}건</td>
-            <td>${item.params.strategy === '가격기반' ? `매수 ${Number(item.params.buyPrice).toLocaleString()}/매도 ${Number(item.params.sellPrice).toLocaleString()}` : `RSI ${item.params.buyRSI}/${item.params.sellRSI}`}</td>
+            <td>${isPriceStrategy(item.params.strategy) ? `매수 ${Number(item.params.buyPrice).toLocaleString()}/매도 ${Number(item.params.sellPrice).toLocaleString()}` : `RSI ${item.params.buyRSI}/${item.params.sellRSI}`}</td>
         `;
         row.addEventListener('click', () => rerun(idx));
         body.appendChild(row);
@@ -618,7 +648,7 @@ function renderRecent() {
 function rerun(idx) {
     const item = history[idx];
     if (!item) return;
-    currentStrategy = item.params.strategy === '가격기반' ? 'price' : 'rsi';
+    currentStrategy = isPriceStrategy(item.params.strategy) ? 'price' : 'rsi';
     document.querySelectorAll('[data-select-strategy]').forEach(c => c.classList.remove('is-active'));
     const targetCard = document.querySelector(`[data-select-strategy="${currentStrategy}"]`);
     targetCard?.classList.add('is-active');
@@ -653,6 +683,12 @@ function defaultStartDate() {
     return formatDateInput(d);
 }
 
+function isPriceStrategy(strategy) {
+    if (!strategy) return false;
+    const s = String(strategy);
+    return s === 'price' || s.toLowerCase().includes('price') || s.includes('가격');
+}
+
 function showChartError(message) {
     let el = document.getElementById('chartError');
     if (!el) {
@@ -670,4 +706,179 @@ function showChartError(message) {
 function clearChartError() {
     const el = document.getElementById('chartError');
     if (el) el.style.display = 'none';
+}
+
+function ensureEquityLabels(result) {
+    const labels = Array.isArray(result.equityLabels) ? result.equityLabels.filter(Boolean) : [];
+    const dataLen = Array.isArray(result.equityData) ? result.equityData.length : 0;
+    if (labels.length === dataLen && labels.length) return labels;
+    if (Array.isArray(result.daily) && result.daily.length === dataLen) {
+        return result.daily.map(d => {
+            const dateVal = d.date || d.day || d.timestamp;
+            const parsed = new Date(dateVal);
+            if (!Number.isNaN(parsed.getTime())) return formatDateInput(parsed);
+            return String(dateVal).slice(0, 10);
+        });
+    }
+    const base = result.params?.periodStart ? new Date(result.params.periodStart) : new Date();
+    if (!result.params?.periodStart) base.setDate(base.getDate() - (dataLen - 1));
+    const generated = [];
+    for (let i = 0; i < dataLen; i += 1) {
+        const d = new Date(base);
+        d.setDate(base.getDate() + i);
+        generated.push(formatDateInput(d));
+    }
+    return generated;
+}
+
+function ensureSeriesLabels(result) {
+    if (Array.isArray(result.priceLabels) && result.priceLabels.length === (result.priceData?.length || 0)) {
+        return result.priceLabels;
+    }
+    return ensureEquityLabels(result);
+}
+
+function ensureSeriesData(result) {
+    if (Array.isArray(result.priceData) && result.priceData.length) return result.priceData.map(Number);
+    return result.equityData || [];
+}
+
+async function attachPriceSeries(result) {
+    try {
+        const params = result.params || {};
+        const symbol = params.symbol || '005930';
+        const start = params.periodStart || defaultStartDate();
+        const end = params.periodEnd || formatDateInput(new Date());
+        const url = `${API_BASE}/api/stock-data?symbol=${symbol}&startDate=${start}&endDate=${end}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('price fetch failed');
+        const rows = await res.json();
+        const { labels, closes } = buildPriceSeries(rows);
+        if (labels.length && closes.length) {
+            result.priceLabels = labels;
+            result.priceData = closes;
+        }
+    } catch (e) {
+        console.warn('가격 시계열 로드 실패, 포트폴리오 데이터 사용', e.message);
+    }
+    return result;
+}
+
+function buildPriceSeries(rows) {
+    const labels = [];
+    const closes = [];
+    rows.forEach((r) => {
+        if (!r) return;
+        const date = r.date || r.trade_date || r.day || r.timestamp;
+        const close = Number(r.close ?? r.price ?? r.last ?? r.closingPrice ?? NaN);
+        if (!date || Number.isNaN(close)) return;
+        labels.push(formatDateInput(new Date(date)));
+        closes.push(close);
+    });
+    return { labels, closes };
+}
+
+function drawFallbackChart(canvas, result) {
+    const ctx = canvas.getContext('2d');
+    const series = ensureSeriesData(result);
+    const labels = ensureSeriesLabels(result);
+    if (!ctx || !series.length) {
+        showChartError('차트를 표시할 데이터를 불러오지 못했습니다.');
+        return;
+    }
+    const width = canvas.width || canvas.clientWidth || 600;
+    const height = canvas.height || canvas.clientHeight || 320;
+    ctx.clearRect(0, 0, width, height);
+    const pad = { top: 20, right: 20, bottom: 30, left: 50 };
+    const xs = labels;
+    const ys = series;
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const yRange = maxY - minY || 1;
+    const xStep = (width - pad.left - pad.right) / Math.max(ys.length - 1, 1);
+    const mapX = (i) => pad.left + i * xStep;
+    const mapY = (v) => pad.top + (height - pad.top - pad.bottom) * (1 - (v - minY) / yRange);
+
+    // axes
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top);
+    ctx.lineTo(pad.left, height - pad.bottom);
+    ctx.lineTo(width - pad.right, height - pad.bottom);
+    ctx.stroke();
+
+    // polyline
+    ctx.strokeStyle = '#2563eb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ys.forEach((v, i) => {
+        const x = mapX(i);
+        const y = mapY(v);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // fill
+    ctx.fillStyle = 'rgba(37,99,235,0.12)';
+    ctx.lineTo(mapX(ys.length - 1), height - pad.bottom);
+    ctx.lineTo(mapX(0), height - pad.bottom);
+    ctx.closePath();
+    ctx.fill();
+
+    // buy/sell markers based on trades date match
+    const buys = [];
+    const sells = [];
+    result.trades.forEach((t) => {
+        const dateKey = (t.date || '').slice(0, 10);
+        const idx = xs.findIndex((d) => d === dateKey);
+        if (idx >= 0) {
+            const x = mapX(idx);
+            const y = mapY(ys[idx]);
+            if (t.type === 'BUY') buys.push({ x, y });
+            if (t.type === 'SELL') sells.push({ x, y });
+        }
+    });
+    ctx.fillStyle = '#16a34a';
+    buys.forEach((p) => {
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - 6);
+        ctx.lineTo(p.x - 5, p.y + 5);
+        ctx.lineTo(p.x + 5, p.y + 5);
+        ctx.closePath();
+        ctx.fill();
+    });
+    ctx.fillStyle = '#dc2626';
+    sells.forEach((p) => {
+        ctx.beginPath();
+        ctx.moveTo(p.x - 5, p.y - 5);
+        ctx.lineTo(p.x + 5, p.y - 5);
+        ctx.lineTo(p.x + 5, p.y + 5);
+        ctx.lineTo(p.x - 5, p.y + 5);
+        ctx.closePath();
+        ctx.fill();
+    });
+
+    // Y ticks (min/mid/max)
+    ctx.fillStyle = '#475569';
+    ctx.font = '12px sans-serif';
+    [minY, (minY + maxY) / 2, maxY].forEach((val, i) => {
+        const y = mapY(val);
+        const label = `${Math.round(val).toLocaleString()}원`;
+        ctx.fillText(label, 6, y + 4);
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(width - pad.right, y);
+        ctx.stroke();
+    });
+
+    // X ticks (start/mid/end)
+    const tickIdx = [0, Math.floor(xs.length / 2), xs.length - 1].filter((v, i, arr) => arr.indexOf(v) === i && xs[v]);
+    ctx.textAlign = 'center';
+    tickIdx.forEach((i) => {
+        const x = mapX(i);
+        ctx.fillText(xs[i], x, height - pad.bottom + 16);
+    });
 }

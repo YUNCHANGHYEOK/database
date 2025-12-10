@@ -250,7 +250,7 @@
                             </div>
                             <button class="text-btn">Buy &amp; Hold 비교</button>
                         </div>
-                        <canvas id="backtestChart" height="320"></canvas>
+                        <canvas id="backtestChart" height="240"></canvas>
                         <p id="chartError" class="chart-error">차트를 표시할 데이터를 불러오지 못했습니다.</p>
                     </div>
                     <div class="chart-side">
@@ -258,19 +258,12 @@
                             <p class="eyebrow">전략 설정 요약</p>
                             <ul id="strategySummary" class="mini-list">
                                 <li><span>전략 유형</span><span>-</span></li>
-                                <li><span>종목</span><span>개인투자 (단일)</span></li>
+                                <li><span>종목</span><span>삼성전자</span></li>
                                 <li><span>조회 기간</span><span>-</span></li>
                                 <li><span>기준값</span><span>-</span></li>
                                 <li><span>초기 투자금</span><span>-</span></li>
                                 <li><span>수수료/슬리피지</span><span>기본 비율 적용</span></li>
                             </ul>
-                        </div>
-                        <div class="info-card soft">
-                            <p class="eyebrow">다음 액션</p>
-                            <div class="action-row">
-                                <button class="secondary-btn" data-page-btn data-target="builder">설정 변경</button>
-                                <button class="text-btn backtest-btn">동일 전략 실행</button>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -378,7 +371,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="chart.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
