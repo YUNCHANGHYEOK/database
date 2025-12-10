@@ -34,17 +34,17 @@ app.get('/api/stock-data', async (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
 
-    let query = 'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ?';
+    let query = 'SELECT trade_date AS date, open, close, rsi FROM stock_prices WHERE symbol = ?';
     const params = [symbol];
     if (startDate) {
-      query += ' AND date >= ?';
+      query += ' AND trade_date >= ?';
       params.push(startDate);
     }
     if (endDate) {
-      query += ' AND date <= ?';
+      query += ' AND trade_date <= ?';
       params.push(endDate);
     }
-    query += ' ORDER BY date';
+    query += ' ORDER BY trade_date';
 
     const [rows] = await db.pool.query(query, params);
     res.json(rows);
@@ -188,7 +188,7 @@ async function fetchAndSaveData(symbol, startDate, endDate) {
         if (!row.date) continue;
         const d = `${row.date.slice(0, 4)}-${row.date.slice(4, 6)}-${row.date.slice(6, 8)}`;
         await db.pool.query(
-          `INSERT INTO stock_prices (symbol, date, open, close, rsi, avg_gain, avg_loss)
+      `INSERT INTO stock_prices (symbol, trade_date, open, close, rsi, avg_gain, avg_loss)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [symbol, d, row.open, row.close, row.rsi || null, row.avg_gain || null, row.avg_loss || null],
         );
@@ -200,17 +200,17 @@ async function fetchAndSaveData(symbol, startDate, endDate) {
 }
 
 async function loadPriceRows({ symbol, startDate, endDate }) {
-  let query = 'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ?';
+  let query = 'SELECT trade_date AS date, open, close, rsi FROM stock_prices WHERE symbol = ?';
   const params = [symbol];
   if (startDate) {
-    query += ' AND date >= ?';
+    query += ' AND trade_date >= ?';
     params.push(startDate);
   }
   if (endDate) {
-    query += ' AND date <= ?';
+    query += ' AND trade_date <= ?';
     params.push(endDate);
   }
-  query += ' ORDER BY date';
+  query += ' ORDER BY trade_date';
   const [rows] = await db.pool.query(query, params);
   return rows;
 }
