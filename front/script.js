@@ -6,16 +6,23 @@ let history = [];
 let equityChart;
 
 document.addEventListener('DOMContentLoaded', () => {
-    wireNavigation();
-    wireStrategySelector();
-    wirePresetButtons();
-    wireRunButton();
-    loadHistory();
-    renderRecent();
+    try {
+        wireNavigation();
+        wireStrategySelector();
+        wirePresetButtons();
+        wireRunButton();
+        loadHistory();
+        renderRecent();
+    } catch (e) {
+        console.error('초기화 중 오류가 발생했습니다.', e);
+        alert('화면 초기화 중 오류가 발생했습니다. 새로고침 후에도 문제가 지속되면 콘솔 로그를 확인해주세요.');
+    }
 });
 
 function wireNavigation() {
-    document.querySelectorAll('[data-page-btn]').forEach(btn => {
+    const navButtons = document.querySelectorAll('[data-page-btn]');
+    if (!navButtons.length) return;
+    navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const target = btn.getAttribute('data-target');
             document.querySelectorAll('.nav-item').forEach(b => {
@@ -34,18 +41,23 @@ function switchPage(target) {
 }
 
 function wireStrategySelector() {
-    document.querySelectorAll('[data-select-strategy]').forEach(card => {
+    const cards = document.querySelectorAll('[data-select-strategy]');
+    const priceForm = document.getElementById('priceBacktestForm');
+    const rsiForm = document.getElementById('rsiBacktestForm');
+    if (!cards.length) return;
+    cards.forEach(card => {
         card.addEventListener('click', () => {
             const type = card.getAttribute('data-select-strategy');
             currentStrategy = type;
-            document.querySelectorAll('[data-select-strategy]').forEach(c => c.classList.remove('is-active'));
+            cards.forEach(c => c.classList.remove('is-active'));
             card.classList.add('is-active');
-            document.getElementById('rsiBacktestForm').style.display = type === 'rsi' ? 'block' : 'none';
-            document.getElementById('priceBacktestForm').style.display = type === 'price' ? 'block' : 'none';
+            if (rsiForm) rsiForm.style.display = type === 'rsi' ? 'block' : 'none';
+            if (priceForm) priceForm.style.display = type === 'price' ? 'block' : 'none';
         });
     });
-    document.querySelector('[data-select-strategy="price"]').classList.add('is-active');
-    document.getElementById('priceBacktestForm').style.display = 'block';
+    const priceCard = document.querySelector('[data-select-strategy="price"]');
+    if (priceCard) priceCard.classList.add('is-active');
+    if (priceForm) priceForm.style.display = 'block';
 }
 
 function wirePresetButtons() {
@@ -113,21 +125,7 @@ async function runBacktestBackend(params) {
     });
     if (!res.ok) throw new Error('백엔드 응답 오류');
     const data = await res.json();
-    const summary = data.summary || {
-        profit: data.profit,
-        profitRate: data.profitRate,
-        mdd: data.mdd,
-        tradeCount: data.totalTrades ?? data.tradeCount,
-        winRate: data.winRate
-    };
-    return {
-        params,
-        equityLabels: data.equityLabels || data.labels || data.dates || [],
-        equityData: data.equityData || data.equity || data.portfolio || [],
-        trades: data.trades || data.tradeHistory || [],
-        daily: data.daily || data.dailyReturns || [],
-        summary
-    };
+    return normalizeBackendResult(data, params);
 }
 
 async function autoFetchData(params) {
@@ -170,6 +168,86 @@ function collectParams() {
         periodStart,
         periodEnd
     };
+}
+
+function normalizeBackendResult(data, params) {
+    const mergedParams = data.params ? { ...params, ...data.params } : params;
+    const summary = normalizeSummary(data, mergedParams);
+    const rawLabels = data.equityLabels || data.labels || data.dates || [];
+    const equityLabels = (rawLabels || []).map(label => {
+        if (!label) return '';
+        const parsed = new Date(label);
+        if (!Number.isNaN(parsed.getTime())) return formatDateInput(parsed);
+        return String(label).slice(0, 10);
+    }).filter(Boolean);
+    const equityData = (data.equityData || data.equity || data.portfolio || data.portfolioValue || []).map(Number);
+    const rawTrades = data.trades || data.tradeHistory || data.orders || [];
+    const rawDaily = data.daily || data.dailyReturns || data.performance || [];
+    const trades = normalizeTrades(Array.isArray(rawTrades) ? rawTrades : [], mergedParams.initialCash);
+    const daily = normalizeDaily(Array.isArray(rawDaily) ? rawDaily : [], mergedParams.initialCash);
+    const meta = data.strategySummary || data.meta || mergedParams;
+    return { params: mergedParams, equityLabels, equityData, trades, daily, summary, meta };
+}
+
+function normalizeSummary(data, params) {
+    const summary = {
+        profit: data.profit,
+        profitRate: data.profitRate,
+        mdd: data.mdd ?? data.maxDrawdown,
+        tradeCount: data.totalTrades ?? data.tradeCount,
+        winRate: data.winRate,
+        ...(data.summary || {})
+    };
+    if (typeof summary.profitRate === 'number') summary.profitRate = `${summary.profitRate.toFixed(2)}%`;
+    if (typeof summary.mdd === 'number') summary.mdd = `${summary.mdd.toFixed(2)}%`;
+    if (typeof summary.winRate === 'number') summary.winRate = `${summary.winRate.toFixed(1)}%`;
+    if (summary.profit == null && typeof summary.profitRate === 'string') {
+        const rate = Number(summary.profitRate.replace('%', '')) / 100;
+        summary.profit = Math.round((params.initialCash || 0) * rate);
+    }
+    return summary;
+}
+
+function normalizeTrades(trades, initialCash) {
+    return trades
+        .map(t => {
+            const date = t.date || t.timestamp || t.time || t.executedAt || t.filledAt;
+            const rawType = (t.type || t.side || '').toUpperCase();
+            const type = rawType.includes('SELL') ? 'SELL' : 'BUY';
+            const price = Number(t.price ?? t.fillPrice ?? t.executedPrice ?? 0);
+            const shares = Number(t.shares ?? t.quantity ?? t.qty ?? 0);
+            const amount = Number(t.amount ?? t.total ?? (price && shares ? price * shares : 0));
+            const rsi = t.rsi ?? (t.indicator ? t.indicator.rsi : null);
+            return { date, type, price, shares, amount, rsi };
+        })
+        .filter(t => t.date)
+        .map(t => ({
+            ...t,
+            amount: isNaN(t.amount) ? 0 : Math.round(t.amount || 0),
+            price: isNaN(t.price) ? 0 : t.price,
+            shares: isNaN(t.shares) ? 0 : t.shares
+        }));
+}
+
+function normalizeDaily(list, initialCash) {
+    return list
+        .map(item => {
+            const date = item.date || item.day || item.timestamp;
+            const portfolioSource = item.portfolio ?? item.portfolioValue ?? item.value ?? initialCash ?? 0;
+            const portfolio = Number(portfolioSource);
+            const dailyReturn = item.dailyReturn ?? item.return ?? item.daily_return;
+            const cumulative = item.cumulative ?? item.cumulativeReturn ?? item.cumulative_return;
+            const dailyReturnPct = dailyReturn != null ? Number(dailyReturn).toFixed(2) : null;
+            const cumulativePct = cumulative != null ? Number(cumulative).toFixed(2) : null;
+            const fallbackCumulative = ((portfolio - initialCash) / (initialCash || 1) * 100).toFixed(2);
+            return {
+                date,
+                dailyReturn: dailyReturnPct ?? '0.00',
+                cumulative: cumulativePct ?? fallbackCumulative,
+                portfolio: Math.round(portfolio)
+            };
+        })
+        .filter(item => item.date);
 }
 
 function toggleLoading(show) {
@@ -290,7 +368,14 @@ function renderResults(result) {
     const { params } = result;
     const summary = { ...(result.summary || {}) };
     summary.tradeCount = summary.tradeCount ?? result.trades?.length ?? 0;
-    summary.winRate = computeWinRate(result.trades || []);
+    summary.winRate = summary.winRate ?? computeWinRate(result.trades || []);
+    if (!summary.profitRate && result.equityData?.length) {
+        const finalValue = result.equityData[result.equityData.length - 1];
+        const base = params.initialCash || 1;
+        const rate = ((finalValue - base) / base) * 100;
+        summary.profitRate = `${rate.toFixed(2)}%`;
+        summary.profit = summary.profit ?? Math.round(finalValue - base);
+    }
     const container = document.getElementById('backtestResults');
     if (container) container.style.display = 'grid';
     const profit = Number(summary.profit || 0);
@@ -309,7 +394,7 @@ function renderResults(result) {
     renderEquityChart(result);
     renderTrades(result.trades || []);
     renderDaily(result.daily || []);
-    renderStrategySummary(params);
+    renderStrategySummary(params, result.meta || params);
     result.summary = summary;
     switchPage('results');
 }
@@ -330,14 +415,21 @@ function computeWinRate(trades) {
 }
 
 function renderEquityChart(result) {
+    clearChartError();
     const ctx = document.getElementById('backtestChart');
-    if (!ctx || !result.equityData.length) return;
+    if (!ctx) return;
+    if (!result.equityData.length || !result.equityLabels.length) {
+        showChartError('차트를 표시할 데이터를 불러오지 못했습니다.');
+        if (equityChart) equityChart.destroy();
+        return;
+    }
     if (equityChart) equityChart.destroy();
 
     const buyPoints = new Array(result.equityData.length).fill(null);
     const sellPoints = new Array(result.equityData.length).fill(null);
     result.trades.forEach(t => {
-        const idx = result.equityLabels.findIndex(d => d === t.date.slice(0, 10));
+        const dateKey = (t.date || '').slice(0, 10);
+        const idx = result.equityLabels.findIndex(d => d === dateKey);
         if (idx >= 0) {
             const pv = result.equityData[idx];
             if (t.type === 'BUY') buyPoints[idx] = pv;
@@ -349,30 +441,35 @@ function renderEquityChart(result) {
     const maxVal = Math.max(...result.equityData);
     const pad = Math.max(1000, (maxVal - minVal) * 0.08);
 
-    equityChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: result.equityLabels,
-            datasets: [
-                { label: '포트폴리오 가치', data: result.equityData, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.15)', tension: 0.2, fill: true, pointRadius: 0 },
-                { label: '매수', data: buyPoints, borderColor: '#16a34a', backgroundColor: '#16a34a', pointStyle: 'triangle', pointRadius: 7, showLine: false },
-                { label: '매도', data: sellPoints, borderColor: '#dc2626', backgroundColor: '#dc2626', pointStyle: 'rectRot', pointRadius: 7, showLine: false }
-            ]
-        },
-        options: {
-            responsive: true,
-            interaction: { mode: 'index', intersect: false },
-            scales: {
-                x: { display: false },
-                y: {
-                    suggestedMin: minVal - pad,
-                    suggestedMax: maxVal + pad,
-                    ticks: { callback: v => `${v.toLocaleString()}원` }
-                }
+    try {
+        equityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: result.equityLabels,
+                datasets: [
+                    { label: '포트폴리오 가치', data: result.equityData, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.15)', tension: 0.2, fill: true, pointRadius: 0 },
+                    { label: '매수', data: buyPoints, borderColor: '#16a34a', backgroundColor: '#16a34a', pointStyle: 'triangle', pointRadius: 7, showLine: false },
+                    { label: '매도', data: sellPoints, borderColor: '#dc2626', backgroundColor: '#dc2626', pointStyle: 'rectRot', pointRadius: 7, showLine: false }
+                ]
             },
-            plugins: { legend: { display: true } }
-        }
-    });
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { display: false },
+                    y: {
+                        suggestedMin: minVal - pad,
+                        suggestedMax: maxVal + pad,
+                        ticks: { callback: v => `${v.toLocaleString()}원` }
+                    }
+                },
+                plugins: { legend: { display: true } }
+            }
+        });
+    } catch (e) {
+        console.error('차트 렌더링 실패', e);
+        showChartError('차트 렌더링에 실패했습니다. 설정을 다시 확인해주세요.');
+    }
 }
 
 function renderTrades(trades) {
@@ -424,19 +521,28 @@ function renderDaily(list) {
     });
 }
 
-function renderStrategySummary(params) {
+function renderStrategySummary(params, meta = {}) {
     const items = document.querySelectorAll('#strategySummary li span:last-child');
     if (!items.length) return;
-    items[0].textContent = params.strategy;
-    items[1].textContent = '개인투자 (단일 종목)';
-    items[2].textContent = params.periodStart && params.periodEnd ? `${params.periodStart} ~ ${params.periodEnd}` : '최근 구간';
-    if (params.strategy === '가격기반') {
-        items[3].textContent = `매수 ${params.buyPrice.toLocaleString()} / 매도 ${params.sellPrice.toLocaleString()}`;
+    const source = { ...params, ...meta };
+    const strategyName = source.strategy || params.strategy;
+    items[0].textContent = strategyName;
+    items[1].textContent = source.symbol || source.ticker || source.asset || '개인투자 (단일 종목)';
+    const start = source.periodStart || source.startDate || source.start;
+    const end = source.periodEnd || source.endDate || source.end;
+    items[2].textContent = start && end ? `${start} ~ ${end}` : '최근 구간';
+    if (strategyName === '가격기반') {
+        const buy = Number(source.buyPrice ?? params.buyPrice);
+        const sell = Number(source.sellPrice ?? params.sellPrice);
+        items[3].textContent = `매수 ${buy.toLocaleString()} / 매도 ${sell.toLocaleString()}`;
     } else {
-        items[3].textContent = `RSI ${params.buyRSI} ~ ${params.sellRSI} (기간 ${params.rsiPeriod})`;
+        const buyRSI = source.buyRSI ?? params.buyRSI;
+        const sellRSI = source.sellRSI ?? params.sellRSI;
+        const rsiPeriod = source.rsiPeriod ?? params.rsiPeriod;
+        items[3].textContent = `RSI ${buyRSI} ~ ${sellRSI} (기간 ${rsiPeriod})`;
     }
-    items[4].textContent = `${params.initialCash.toLocaleString()}원`;
-    items[5].textContent = '기본 수수료·슬리피지 적용';
+    items[4].textContent = `${Number(source.initialCash ?? params.initialCash).toLocaleString()}원`;
+    items[5].textContent = source.feeText || source.slippageText || '기본 수수료·슬리피지 적용';
 }
 
 function saveHistory(result) {
@@ -545,4 +651,23 @@ function defaultStartDate() {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 1);
     return formatDateInput(d);
+}
+
+function showChartError(message) {
+    let el = document.getElementById('chartError');
+    if (!el) {
+        const area = document.querySelector('.chart-area');
+        if (!area) return;
+        el = document.createElement('p');
+        el.id = 'chartError';
+        el.className = 'chart-error';
+        area.appendChild(el);
+    }
+    el.textContent = message;
+    el.style.display = 'block';
+}
+
+function clearChartError() {
+    const el = document.getElementById('chartError');
+    if (el) el.style.display = 'none';
 }

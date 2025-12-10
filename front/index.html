@@ -104,7 +104,9 @@
                                 <button type="button" class="chip seed-btn" data-target="price" data-seed="5000000">500만 원</button>
                                 <button type="button" class="chip seed-btn" data-target="price" data-seed="10000000">1000만 원</button>
                             </div>
-                            <input type="number" class="full" id="initialCash" placeholder="직접 입력" value="1000000">
+                            <div class="input-group full">
+                                <input type="number" id="initialCash" placeholder="금액 입력" value="1000000" min="0">
+                            </div>
                         </div>
                         <div class="form-row date-presets">
                             <div class="date-left">
@@ -169,7 +171,9 @@
                                 <button type="button" class="chip seed-btn" data-target="rsi" data-seed="5000000">500만 원</button>
                                 <button type="button" class="chip seed-btn" data-target="rsi" data-seed="10000000">1000만 원</button>
                             </div>
-                            <input type="number" class="full" id="initialCashRSI" placeholder="직접 입력" value="1000000">
+                            <div class="input-group full">
+                                <input type="number" id="initialCashRSI" placeholder="금액 입력" value="1000000" min="0">
+                            </div>
                         </div>
                         <div class="form-row date-presets">
                             <div class="date-left">
@@ -247,6 +251,7 @@
                             <button class="text-btn">Buy &amp; Hold 비교</button>
                         </div>
                         <canvas id="backtestChart" height="320"></canvas>
+                        <p id="chartError" class="chart-error">차트를 표시할 데이터를 불러오지 못했습니다.</p>
                     </div>
                     <div class="chart-side">
                         <div class="info-card">
