@@ -4,6 +4,7 @@ const API_BASE = window.API_BASE || '';
 let currentStrategy = 'price';
 let history = [];
 let equityChart;
+let priceChart;
 let chartLoadPromise = null;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -367,6 +368,7 @@ async function renderResults(result) {
     await ensureChartLoaded().catch(err => {
         console.warn('Chart.js 로드 실패, 차트 건너뜀', err);
     });
+    await attachPriceSeries(result);
     const { params } = result;
     const summary = { ...(result.summary || {}) };
     summary.tradeCount = summary.tradeCount ?? result.trades?.length ?? 0;
@@ -394,6 +396,12 @@ async function renderResults(result) {
     }
 
     try {
+        renderPriceChart(result);
+    } catch (err) {
+        console.error('가격 차트 렌더링 실패', err);
+        showPriceChartError('차트를 불러오는 중 오류가 발생했습니다.');
+    }
+    try {
         renderEquityChart(result);
     } catch (err) {
         console.error('차트 렌더링 실패', err);
@@ -419,6 +427,151 @@ function computeWinRate(trades) {
     });
     if (!total) return '-';
     return `${((wins / total) * 100).toFixed(1)}%`;
+}
+
+function renderPriceChart(result) {
+    const wrap = document.getElementById('priceChartArea');
+    const canvas = document.getElementById('priceChart');
+    const errorEl = document.getElementById('priceChartError');
+    if (!wrap || !canvas) return;
+    if (typeof Chart === 'undefined') {
+        showPriceChartError('차트 라이브러리를 불러오지 못했습니다.');
+        return;
+    }
+
+    const labels = ensureSeriesLabels(result).map(normalizeDateLabel);
+    const prices = ensureSeriesData(result);
+    if (!labels.length || !prices.length) {
+        showPriceChartError('가격 데이터를 불러오지 못했습니다.');
+        return;
+    }
+
+    const len = Math.min(labels.length, prices.length);
+    let entries = labels.slice(0, len).map((label, idx) => ({
+        label,
+        value: Number(prices[idx])
+    }));
+
+    const buys = (result.trades || []).filter(t => (t.type || '').toUpperCase() === 'BUY');
+    const sells = (result.trades || []).filter(t => (t.type || '').toUpperCase() === 'SELL');
+
+    // 거래 날짜가 라벨에 없을 경우, 마지막 가격으로 채워서 추가
+    const tradeDates = [...buys, ...sells].map(t => normalizeDateLabel(t.date)).filter(Boolean);
+    const labelSet = new Set(entries.map(e => e.label));
+    const lastPrice = entries.length ? entries[entries.length - 1].value : 0;
+    tradeDates.forEach(d => {
+        if (!labelSet.has(d)) {
+            entries.push({ label: d, value: lastPrice });
+            labelSet.add(d);
+        }
+    });
+
+    // 날짜 순으로 정렬
+    entries.sort((a, b) => {
+        const da = parseDateSafe(a.label)?.getTime() ?? 0;
+        const db = parseDateSafe(b.label)?.getTime() ?? 0;
+        return da - db;
+    });
+
+    const labelSlice = entries.map(e => e.label);
+    const priceSlice = entries.map(e => e.value);
+    const pointData = labelSlice.map((l, idx) => ({ x: l, y: priceSlice[idx] })); // 라벨 문자열 기반
+
+    const toPoint = t => {
+        const label = normalizeDateLabel(t.date);
+        const price = Number(t.price || t.fillPrice || t.executedPrice || 0);
+        if (!label || !labelSet.has(label) || !Number.isFinite(price)) return null;
+        return { x: label, y: price };
+    };
+    const buyPoints = buys.map(toPoint).filter(Boolean);
+    const sellPoints = sells.map(toPoint).filter(Boolean);
+    wrap.classList.add('has-chart');
+    errorEl.style.display = 'none';
+    canvas.style.display = 'block';
+
+    if (priceChart) {
+        try { priceChart.destroy(); } catch (e) {}
+        priceChart = null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.clientHeight || canvas.height || 200);
+    gradient.addColorStop(0, 'rgba(47, 128, 237, 0.25)');
+    gradient.addColorStop(1, 'rgba(47, 128, 237, 0)');
+
+    priceChart = new Chart(ctx, {
+        type: 'line',
+            data: {
+                labels: labelSlice,
+                datasets: [
+                    {
+                        label: '종가',
+                    data: pointData,
+                    borderColor: '#2f80ed',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    tension: 0.25,
+                    pointRadius: 0,
+                    pointHitRadius: 6,
+                    fill: true
+                },
+                {
+                    type: 'scatter',
+                    label: '매수',
+                    data: buyPoints,
+                    yAxisID: 'y',
+                    backgroundColor: 'rgba(22, 163, 74, 0.9)',
+                    borderColor: 'rgba(22, 163, 74, 0.9)',
+                    pointRadius: 5,
+                    pointStyle: 'triangle',
+                    showLine: false
+                },
+                {
+                    type: 'scatter',
+                    label: '매도',
+                    data: sellPoints,
+                    yAxisID: 'y',
+                    backgroundColor: 'rgba(220, 38, 38, 0.9)',
+                    borderColor: 'rgba(220, 38, 38, 0.9)',
+                    pointRadius: 5,
+                    pointStyle: 'rectRot',
+                    showLine: false
+                }
+            ]
+        },
+        options: {
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: {
+                    ticks: { maxTicksLimit: 10 },
+                    grid: { display: false },
+                    title: { display: true, text: '조회 기간' }
+                },
+                y: {
+                    title: { display: true, text: '주가 (원)' },
+                    ticks: { callback: v => `${Math.round(Number(v)).toLocaleString()}원` },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                }
+            },
+            plugins: {
+                legend: { display: true },
+                tooltip: {
+                    callbacks: {
+                        title(items) {
+                            return items[0]?.raw?.x || items[0]?.label || '';
+                        },
+                        label(ctx) {
+                            const label = ctx.dataset.label || '';
+                            const val = ctx.raw?.y ?? ctx.parsed?.y;
+                            const priceText = `${Math.round(val).toLocaleString()}원`;
+                            return `${label}: ${priceText}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 function renderEquityChart(result) {
@@ -730,6 +883,16 @@ function showChartError(message) {
     }
     el.textContent = message;
     el.style.display = 'block';
+}
+
+function showPriceChartError(message) {
+    const el = document.getElementById('priceChartError');
+    const area = document.getElementById('priceChartArea');
+    if (!el || !area) return;
+    el.textContent = message;
+    el.style.display = 'block';
+    const canvas = document.getElementById('priceChart');
+    if (canvas) canvas.style.display = 'none';
 }
 
 function clearChartError() {

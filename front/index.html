@@ -241,6 +241,19 @@
                     </div>
                 </div>
 
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">삼성전자</p>
+                            <h4>매매 내역 차트</h4>
+                        </div>
+                    </div>
+                    <div id="priceChartArea" class="chart-area">
+                        <canvas id="priceChart"></canvas>
+                        <p id="priceChartError" class="chart-error">차트를 표시할 데이터를 불러오지 못했습니다.</p>
+                    </div>
+                </div>
+
                 <div class="chart-layout">
                     <div class="chart-area">
                         <div class="panel-header">
@@ -248,7 +261,6 @@
                                 <p class="eyebrow">누적 수익률</p>
                                 <h4>포트폴리오 가치곡선</h4>
                             </div>
-                            <button class="text-btn">Buy &amp; Hold 비교</button>
                         </div>
                         <canvas id="backtestChart" height="120"></canvas>
                         <p id="chartError" class="chart-error">차트를 표시할 데이터를 불러오지 못했습니다.</p>
