@@ -250,7 +250,7 @@
                             </div>
                             <button class="text-btn">Buy &amp; Hold 비교</button>
                         </div>
-                        <canvas id="backtestChart" height="240"></canvas>
+                        <canvas id="backtestChart" height="120"></canvas>
                         <p id="chartError" class="chart-error">차트를 표시할 데이터를 불러오지 못했습니다.</p>
                     </div>
                     <div class="chart-side">
@@ -323,30 +323,22 @@
                     </div>
                     <button class="text-btn" data-page-btn data-target="builder">새 백테스트</button>
                 </div>
-                <div id="comparisonPanel" class="comparison-panel" style="display:none">
-                    <div class="comparison-charts">
-                        <p class="muted small">최근 실행한 전략들의 수익률 곡선을 비교해 보세요.</p>
-                    </div>
-                    <div class="history-table-container">
-                        <table class="trade-table">
-                            <thead>
-                                <tr>
-                                    <th>실행 시각</th>
-                                    <th>전략</th>
-                                    <th>초기자본</th>
-                                    <th>기간</th>
-                                    <th>총수익</th>
-                                    <th>수익률</th>
-                                    <th>거래 건수</th>
-                                    <th>주요 파라미터</th>
-                                </tr>
-                            </thead>
-                            <tbody id="historyTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="panel">
-                    <p class="muted small">전략 비교/재실행 기능은 순차 개선 예정입니다.</p>
+                <div class="history-table-container">
+                    <table class="trade-table">
+                        <thead>
+                            <tr>
+                                <th>실행 시각</th>
+                                <th>전략</th>
+                                <th>초기자본</th>
+                                <th>기간</th>
+                                <th>총수익</th>
+                                <th>수익률</th>
+                                <th>거래 건수</th>
+                                <th>주요 파라미터</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody"></tbody>
+                    </table>
                 </div>
             </section>
         </main>
