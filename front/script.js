@@ -4,6 +4,7 @@ const API_BASE = window.API_BASE || '';
 let currentStrategy = 'price';
 let history = [];
 let equityChart;
+let chartLoadPromise = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -13,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         wireRunButton();
         loadHistory();
         renderRecent();
+        ensureChartLoaded().catch(err => console.warn('Chart.js 초기 로드 실패', err));
     } catch (e) {
         console.error('초기화 중 오류가 발생했습니다.', e);
         alert('화면 초기화 중 오류가 발생했습니다. 새로고침 후에도 문제가 지속되면 콘솔 로그를 확인해주세요.');
@@ -106,8 +108,7 @@ function runBacktest() {
         .then(() => runBacktestBackend(params))
         .catch(() => generateMockResult(params))
         .then(result => {
-            renderResults(result);
-            saveHistory(result);
+            return renderResults(result).then(() => saveHistory(result));
         })
         .finally(() => {
             toggleLoading(false);
@@ -362,7 +363,10 @@ function calcMDD(values) {
     return (mdd * 100).toFixed(2) + '%';
 }
 
-function renderResults(result) {
+async function renderResults(result) {
+    await ensureChartLoaded().catch(err => {
+        console.warn('Chart.js 로드 실패, 차트 건너뜀', err);
+    });
     const { params } = result;
     const summary = { ...(result.summary || {}) };
     summary.tradeCount = summary.tradeCount ?? result.trades?.length ?? 0;
@@ -389,7 +393,12 @@ function renderResults(result) {
         pill.className = profit >= 0 ? 'pill positive' : 'pill negative';
     }
 
-    renderEquityChart(result);
+    try {
+        renderEquityChart(result);
+    } catch (err) {
+        console.error('차트 렌더링 실패', err);
+        showChartError('차트를 불러오는 중 오류가 발생했습니다.');
+    }
     renderTrades(result.trades || []);
     renderDaily(result.daily || []);
     renderStrategySummary(params, result.meta || params);
@@ -414,23 +423,101 @@ function computeWinRate(trades) {
 
 function renderEquityChart(result) {
     clearChartError();
+    hideChartRemovedMessage();
+    const canvas = document.getElementById('backtestChart');
+    const area = document.querySelector('.chart-area');
+    if (!canvas || !area) return;
+
+    if (typeof Chart === 'undefined') {
+        showChartError('차트 라이브러리를 불러오지 못했습니다.');
+        return;
+    }
+
+    const series = buildPortfolioSeries(result);
+    if (!series.length) {
+        canvas.style.display = 'none';
+        showChartError('포트폴리오 가치 데이터가 없습니다.');
+        return;
+    }
+
+    const chartLabels = series.map(item => item.label);
+    const portfolioValues = series.map(item => item.value);
+    const pointData = chartLabels.map((label, idx) => ({ x: label, y: portfolioValues[idx] }));
+    const safeValues = portfolioValues.filter(v => Number.isFinite(v));
+    const maxVal = safeValues.length ? Math.max(...safeValues) : 0;
+    const minVal = safeValues.length ? Math.min(...safeValues) : 0;
+    const padding = safeValues.length ? Math.max(1, (maxVal - minVal) * 0.05) : 1;
+    const axisMin = Math.max(0, minVal - padding);
+    const axisMax = maxVal + padding;
+
+    canvas.style.display = 'block';
     if (equityChart) {
         try { equityChart.destroy(); } catch (e) {}
         equityChart = null;
     }
-    const area = document.querySelector('.chart-area');
-    if (area) {
-        const canvas = document.getElementById('backtestChart');
-        if (canvas) canvas.style.display = 'none';
-        let msg = document.getElementById('chartRemovedMsg');
-        if (!msg) {
-            msg = document.createElement('p');
-            msg.id = 'chartRemovedMsg';
-            msg.className = 'muted';
-            area.appendChild(msg);
-        }
-        msg.textContent = '차트 표시가 비활성화되었습니다.';
-        msg.style.display = 'block';
+
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.clientHeight || canvas.height || 200);
+    gradient.addColorStop(0, 'rgba(47, 128, 237, 0.25)');
+    gradient.addColorStop(1, 'rgba(47, 128, 237, 0)');
+
+    try {
+        equityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [
+                    {
+                        label: '포트폴리오 가치',
+                        data: pointData,
+                        yAxisID: 'y',
+                        borderColor: '#2f80ed',
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        tension: 0.25,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHitRadius: 6
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        ticks: { maxTicksLimit: 8 },
+                        grid: { display: false },
+                        title: { display: true, text: '조회 기간' }
+                    },
+                    y: {
+                        title: { display: true, text: '포트폴리오 가치 (원)' },
+                        ticks: { callback: value => `${Math.round(Number(value)).toLocaleString()}원` },
+                        min: axisMin,
+                        max: axisMax,
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        displayColors: false,
+                        callbacks: {
+                            title(items) {
+                                return items[0]?.raw?.x || '';
+                            },
+                            label(context) {
+                                const value = Math.round(context.parsed.y).toLocaleString();
+                                return `포트폴리오 가치: ${value}원`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (err) {
+        console.error('Chart.js 렌더 실패', err);
+        showChartError('차트를 그리는 중 오류가 발생했습니다.');
     }
 }
 
@@ -446,15 +533,17 @@ function renderTrades(trades) {
     }
     trades.forEach(t => {
         const row = document.createElement('tr');
-        const dateText = new Date(t.date).toLocaleDateString('ko-KR');
+        const dateText = formatDisplayDate(t.date);
+        const price = Number(t.price);
+        const amount = Number(t.amount);
         const typeText = t.type === 'BUY' ? '매수' : '매도';
         row.innerHTML = `
             <td>${dateText}</td>
             <td class="${t.type === 'BUY' ? 'trade-type-buy' : 'trade-type-sell'}">${typeText}</td>
-            <td>${Number(t.price).toLocaleString()}원</td>
-            <td>${t.shares}</td>
-            <td>${Number(t.amount).toLocaleString()}원</td>
-            <td>${t.rsi ? Number(t.rsi).toFixed(2) : '-'}</td>
+            <td>${Number.isFinite(price) ? price.toLocaleString() + '원' : '-'}</td>
+            <td>${Number.isFinite(Number(t.shares)) ? t.shares : '-'}</td>
+            <td>${Number.isFinite(amount) ? amount.toLocaleString() + '원' : '-'}</td>
+            <td>${t.rsi != null && !Number.isNaN(Number(t.rsi)) ? Number(t.rsi).toFixed(2) : '-'}</td>
         `;
         body.appendChild(row);
     });
@@ -472,12 +561,15 @@ function renderDaily(list) {
     }
     list.forEach(item => {
         const row = document.createElement('tr');
-        const dateText = new Date(item.date).toLocaleDateString('ko-KR');
+        const dateText = formatDisplayDate(item.date || item.day || item.timestamp);
+        const dailyReturn = item.dailyReturn ?? item.return ?? item.daily_return ?? '0.00';
+        const cumulative = item.cumulative ?? item.cumulativeReturn ?? item.cumulative_return ?? '0.00';
+        const portfolio = Number(item.portfolio ?? item.value ?? item.equity ?? NaN);
         row.innerHTML = `
             <td>${dateText}</td>
-            <td>${item.dailyReturn}%</td>
-            <td>${item.cumulative}%</td>
-            <td>${item.portfolio.toLocaleString()}원</td>
+            <td>${dailyReturn}%</td>
+            <td>${cumulative}%</td>
+            <td>${Number.isFinite(portfolio) ? portfolio.toLocaleString() + '원' : '-'}</td>
         `;
         body.appendChild(row);
     });
@@ -645,6 +737,11 @@ function clearChartError() {
     if (el) el.style.display = 'none';
 }
 
+function hideChartRemovedMessage() {
+    const msg = document.getElementById('chartRemovedMsg');
+    if (msg) msg.style.display = 'none';
+}
+
 function ensureEquityLabels(result) {
     const labels = Array.isArray(result.equityLabels) ? result.equityLabels.filter(Boolean) : [];
     const dataLen = Array.isArray(result.equityData) ? result.equityData.length : 0;
@@ -678,6 +775,86 @@ function ensureSeriesLabels(result) {
 function ensureSeriesData(result) {
     if (Array.isArray(result.priceData) && result.priceData.length) return result.priceData.map(Number);
     return result.equityData || [];
+}
+
+function buildPortfolioSeries(result) {
+    if (Array.isArray(result.daily) && result.daily.length) {
+        const list = result.daily
+            .filter(item => item && (item.date || item.day || item.timestamp))
+            .map(item => {
+                const label = normalizeDateLabel(item.date || item.day || item.timestamp);
+                const value = Number(item.portfolio ?? item.value ?? item.equity ?? item.portfolioValue ?? NaN);
+                return { label, value };
+            })
+            .filter(item => item.label && Number.isFinite(item.value));
+        if (list.length) return list;
+    }
+
+    const labels = ensureEquityLabels(result);
+    const data = Array.isArray(result.equityData) ? result.equityData.map(Number) : [];
+    const len = Math.min(labels.length, data.length);
+    const series = [];
+    for (let i = 0; i < len; i += 1) {
+        if (Number.isNaN(data[i])) continue;
+        series.push({ label: labels[i], value: data[i] });
+    }
+    return series;
+}
+
+function normalizeDateLabel(value) {
+    const parsed = parseDateSafe(value);
+    if (parsed) return formatDateInput(parsed);
+    return value ? String(value).slice(0, 10) : '';
+}
+
+function parseDateSafe(value) {
+    if (!value) return null;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+    if (typeof value === 'string' && /^\d{8}$/.test(value)) {
+        const y = value.slice(0, 4);
+        const m = value.slice(4, 6);
+        const d = value.slice(6, 8);
+        const parsed = new Date(`${y}-${m}-${d}`);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDisplayDate(value) {
+    const parsed = parseDateSafe(value);
+    if (parsed) return parsed.toLocaleDateString('ko-KR');
+    return value ? String(value).slice(0, 10) : '-';
+}
+
+function ensureChartLoaded() {
+    if (typeof Chart !== 'undefined') return Promise.resolve();
+    if (chartLoadPromise) return chartLoadPromise;
+    chartLoadPromise = new Promise((resolve, reject) => {
+        let script = document.querySelector('script[data-chartjs], script[src*="chart.min.js"]');
+        if (!script) {
+            script = document.createElement('script');
+            script.src = 'chart.min.js';
+            script.async = true;
+            script.dataset.chartjs = 'true';
+            document.head.appendChild(script);
+        }
+        const cleanup = () => {
+            script.removeEventListener('load', onLoad);
+            script.removeEventListener('error', onError);
+        };
+        const onLoad = () => { cleanup(); resolve(); };
+        const onError = () => { cleanup(); reject(new Error('Chart.js load failed')); };
+        script.addEventListener('load', onLoad, { once: true });
+        script.addEventListener('error', onError, { once: true });
+        setTimeout(() => {
+            if (typeof Chart === 'undefined') {
+                cleanup();
+                reject(new Error('Chart.js load timeout'));
+            }
+        }, 5000);
+    });
+    return chartLoadPromise;
 }
 
 async function attachPriceSeries(result) {

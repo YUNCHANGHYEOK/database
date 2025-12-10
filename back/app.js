@@ -20,6 +20,7 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../front')));
 
 // DB 연결 확인
 db.testConnection().then((ok) => {
@@ -112,6 +113,7 @@ app.get('/', (_req, res) => {
 });
 app.get('/style.css', (_req, res) => res.sendFile(path.join(__dirname, '../front/style.css')));
 app.get('/script.js', (_req, res) => res.sendFile(path.join(__dirname, '../front/script.js')));
+app.get('/chart.min.js', (_req, res) => res.sendFile(path.join(__dirname, '../front/chart.min.js')));
 
 // 서버 실행
 app.listen(PORT, () => {
