@@ -1,5 +1,9 @@
-// Plain Backtest 프런트: 삼성전자 단일 종목 전용 데모 UX (모의 데이터)
+﻿// Plain Backtest front script
 const API_BASE = window.API_BASE || '';
+
+let currentStrategy = 'price';
+let history = [];
+let equityChart;
 
 document.addEventListener('DOMContentLoaded', () => {
     wireNavigation();
@@ -10,15 +14,14 @@ document.addEventListener('DOMContentLoaded', () => {
     renderRecent();
 });
 
-let currentStrategy = 'price';
-let history = [];
-let equityChart;
-
 function wireNavigation() {
     document.querySelectorAll('[data-page-btn]').forEach(btn => {
         btn.addEventListener('click', () => {
             const target = btn.getAttribute('data-target');
-            document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('is-active', b === btn));
+            document.querySelectorAll('.nav-item').forEach(b => {
+                const match = b.getAttribute('data-target') === target;
+                b.classList.toggle('is-active', match);
+            });
             switchPage(target);
         });
     });
@@ -41,7 +44,6 @@ function wireStrategySelector() {
             document.getElementById('priceBacktestForm').style.display = type === 'price' ? 'block' : 'none';
         });
     });
-    // 기본 선택: 가격 전략
     document.querySelector('[data-select-strategy="price"]').classList.add('is-active');
     document.getElementById('priceBacktestForm').style.display = 'block';
 }
@@ -92,7 +94,7 @@ function runBacktest() {
     simulateStages()
         .then(() => autoFetchData(params))
         .then(() => runBacktestBackend(params))
-        .catch(() => generateMockResult(params)) // 백엔드 실패 시 더미
+        .catch(() => generateMockResult(params))
         .then(result => {
             renderResults(result);
             saveHistory(result);
@@ -141,7 +143,7 @@ async function autoFetchData(params) {
         if (!res.ok) throw new Error('데이터 수집 실패');
         return res.json();
     } catch (e) {
-        console.warn('데이터 수집 단계에서 오류, 기존 데이터로 진행:', e.message);
+        console.warn('데이터 수집 중단, 기존 데이터로 진행:', e.message);
         return null;
     }
 }
@@ -151,7 +153,7 @@ function collectParams() {
     const periodEnd = (document.getElementById('builderEndPrice') || {}).value || (document.getElementById('builderEndRSI') || {}).value || '';
     if (currentStrategy === 'price') {
         return {
-            strategy: '가격 기반',
+            strategy: '가격기반',
             buyPrice: Number(document.getElementById('buyPrice').value || 60000),
             sellPrice: Number(document.getElementById('sellPrice').value || 66000),
             initialCash: Number(document.getElementById('initialCash').value || 1000000),
@@ -181,7 +183,7 @@ function toggleLoading(show) {
 function simulateStages() {
     return new Promise(resolve => {
         const steps = [
-            '가격 데이터를 분석하는 중입니다...',
+            '가격·데이터를 분석하는 중입니다...',
             '전략을 적용하는 중입니다...',
             '수익률을 계산하는 중입니다...'
         ];
@@ -219,7 +221,6 @@ function generateMockResult(params) {
         date.setDate(date.getDate() - (days - i));
         labels.push(date.toISOString().slice(0, 10));
 
-        // 단순 모의 매매 로직
         if (i % 15 === 0 && shares === 0) {
             shares = Math.floor(params.initialCash / price / 10);
             const amount = shares * price;
@@ -286,14 +287,17 @@ function calcMDD(values) {
 }
 
 function renderResults(result) {
-    const { summary = {}, params } = result;
+    const { params } = result;
+    const summary = { ...(result.summary || {}) };
+    summary.tradeCount = summary.tradeCount ?? result.trades?.length ?? 0;
+    summary.winRate = computeWinRate(result.trades || []);
     const container = document.getElementById('backtestResults');
     if (container) container.style.display = 'grid';
     const profit = Number(summary.profit || 0);
     setText('profitValue', `${profit.toLocaleString()}원`);
     setText('profitRate', `수익률 ${summary.profitRate || '-'}`);
     setText('mddValue', summary.mdd || '-');
-    setText('tradeCountValue', `${summary.tradeCount ?? 0}회`);
+    setText('tradeCountValue', `${summary.tradeCount ?? 0}건`);
     setText('winRateValue', summary.winRate || '-');
 
     const pill = document.getElementById('profitPill');
@@ -306,7 +310,23 @@ function renderResults(result) {
     renderTrades(result.trades || []);
     renderDaily(result.daily || []);
     renderStrategySummary(params);
+    result.summary = summary;
     switchPage('results');
+}
+
+function computeWinRate(trades) {
+    let wins = 0;
+    let total = 0;
+    trades.forEach((t, idx) => {
+        if (t.type !== 'SELL') return;
+        const buy = [...trades.slice(0, idx)].reverse().find(x => x.type === 'BUY');
+        if (!buy) return;
+        total += 1;
+        const profit = Number(t.price || 0) - Number(buy.price || 0);
+        if (profit > 0) wins += 1;
+    });
+    if (!total) return '-';
+    return `${((wins / total) * 100).toFixed(1)}%`;
 }
 
 function renderEquityChart(result) {
@@ -372,9 +392,9 @@ function renderTrades(trades) {
         row.innerHTML = `
             <td>${dateText}</td>
             <td class="${t.type === 'BUY' ? 'trade-type-buy' : 'trade-type-sell'}">${typeText}</td>
-            <td>${t.price.toLocaleString()}원</td>
+            <td>${Number(t.price).toLocaleString()}원</td>
             <td>${t.shares}</td>
-            <td>${t.amount.toLocaleString()}원</td>
+            <td>${Number(t.amount).toLocaleString()}원</td>
             <td>${t.rsi ? Number(t.rsi).toFixed(2) : '-'}</td>
         `;
         body.appendChild(row);
@@ -408,9 +428,9 @@ function renderStrategySummary(params) {
     const items = document.querySelectorAll('#strategySummary li span:last-child');
     if (!items.length) return;
     items[0].textContent = params.strategy;
-    items[1].textContent = '삼성전자 (단일 종목)';
+    items[1].textContent = '개인투자 (단일 종목)';
     items[2].textContent = params.periodStart && params.periodEnd ? `${params.periodStart} ~ ${params.periodEnd}` : '최근 구간';
-    if (params.strategy === '가격 기반') {
+    if (params.strategy === '가격기반') {
         items[3].textContent = `매수 ${params.buyPrice.toLocaleString()} / 매도 ${params.sellPrice.toLocaleString()}`;
     } else {
         items[3].textContent = `RSI ${params.buyRSI} ~ ${params.sellRSI} (기간 ${params.rsiPeriod})`;
@@ -451,8 +471,8 @@ function loadHistory() {
             <td>-</td>
             <td>${item.summary.profit.toLocaleString()}원</td>
             <td>${item.summary.profitRate}</td>
-            <td>${item.summary.tradeCount}회</td>
-            <td>${item.params.strategy === '가격 기반' ? `매수 ${Number(item.params.buyPrice).toLocaleString()}/매도 ${Number(item.params.sellPrice).toLocaleString()}` : `RSI ${item.params.buyRSI}/${item.params.sellRSI}`}</td>
+            <td>${item.summary.tradeCount}건</td>
+            <td>${item.params.strategy === '가격기반' ? `매수 ${Number(item.params.buyPrice).toLocaleString()}/매도 ${Number(item.params.sellPrice).toLocaleString()}` : `RSI ${item.params.buyRSI}/${item.params.sellRSI}`}</td>
         `;
         row.addEventListener('click', () => rerun(idx));
         body.appendChild(row);
@@ -463,20 +483,23 @@ function loadHistory() {
 }
 
 function renderRecent() {
-    const box = document.getElementById('recentBacktests');
+    const box = document.getElementById("recentBacktests");
     if (!box) return;
     if (!history.length) {
-        box.innerHTML = '<p class="muted">아직 실행한 백테스트가 없습니다. 빠른 백테스트를 실행해보세요.</p>';
+        box.innerHTML = "<p class=\"muted\">최근 실행한 백테스트가 없습니다. 빠른 백테스트로 실행해보세요.</p>";
         return;
     }
-    box.innerHTML = '';
+    box.innerHTML = "";
     history.slice(0, 3).forEach((item, idx) => {
-        const div = document.createElement('div');
-        div.className = 'recent-item';
+        const profitRate = item.summary?.profitRate || "-";
+        const mdd = item.summary?.mdd || "-";
+        const winRate = item.summary?.winRate || "-";
+        const div = document.createElement("div");
+        div.className = "recent-item";
         div.innerHTML = `
             <div>
                 <p class="muted small">${item.params.strategy} · ${new Date(item.timestamp).toLocaleDateString('ko-KR')}</p>
-                <p><strong>${item.summary.profitRate}</strong> / ${item.params.initialCash.toLocaleString()}원</p>
+                <p><strong>수익률 ${profitRate}</strong> · MDD ${mdd} · 승률 ${winRate}</p>
             </div>
             <div class="recent-actions">
                 <button class="text-btn" onclick="rerun(${idx})">다시 실행</button>
@@ -489,7 +512,7 @@ function renderRecent() {
 function rerun(idx) {
     const item = history[idx];
     if (!item) return;
-    currentStrategy = item.params.strategy === '가격 기반' ? 'price' : 'rsi';
+    currentStrategy = item.params.strategy === '가격기반' ? 'price' : 'rsi';
     document.querySelectorAll('[data-select-strategy]').forEach(c => c.classList.remove('is-active'));
     const targetCard = document.querySelector(`[data-select-strategy="${currentStrategy}"]`);
     targetCard?.classList.add('is-active');
