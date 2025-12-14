@@ -60,6 +60,16 @@ database/
 - Python으로 키움 API 호출해서 CSV 생성
 - Node.js가 CSV 읽어서 DB에 저장
 
+## 스크린샷
+
+### 메인 화면
+![메인 화면](image/1.png)
+
+### 백테스팅 설정
+![백테스팅 설정](image/2.png)
+
+### 결과 분석
+![결과 분석](image/3.png)
 
 ## 개발 과정
 
