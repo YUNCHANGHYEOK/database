@@ -35,17 +35,17 @@ app.get('/api/stock-data', async (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
 
-    let query = 'SELECT trade_date AS date, open, close, rsi FROM stock_prices WHERE symbol = ?';
+    let query = 'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ?';
     const params = [symbol];
     if (startDate) {
-      query += ' AND trade_date >= ?';
+      query += ' AND date >= ?';
       params.push(startDate);
     }
     if (endDate) {
-      query += ' AND trade_date <= ?';
+      query += ' AND date <= ?';
       params.push(endDate);
     }
-    query += ' ORDER BY trade_date';
+    query += ' ORDER BY date';
 
     const [rows] = await db.pool.query(query, params);
     res.json(rows);
@@ -99,6 +99,86 @@ app.post('/api/backtest', async (req, res) => {
       });
     }
     res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 백테스트 결과 목록 조회
+app.get('/api/backtest-results', async (req, res) => {
+  try {
+    const [results] = await db.pool.query(
+      'SELECT * FROM backtest_results ORDER BY created_at DESC LIMIT 20'
+    );
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 특정 백테스트의 거래 내역 조회
+app.get('/api/backtest-trades/:backtestId', async (req, res) => {
+  try {
+    const [trades] = await db.pool.query(
+      'SELECT * FROM backtest_trades WHERE backtest_id = ? ORDER BY trade_date',
+      [req.params.backtestId]
+    );
+    res.json(trades);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DB 관리 API
+app.post('/api/maintenance/reset-ids', async (req, res) => {
+  try {
+    await db.pool.query('ALTER TABLE stock_prices AUTO_INCREMENT = 1');
+    await db.pool.query('ALTER TABLE backtest_results AUTO_INCREMENT = 1');
+    await db.pool.query('ALTER TABLE backtest_trades AUTO_INCREMENT = 1');
+    res.json({ success: true, message: 'ID 카운터가 리셋되었습니다.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/maintenance/old-data', async (req, res) => {
+  try {
+    const daysToKeep = req.query.days || 365;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    const dateStr = cutoffDate.toISOString().slice(0, 10);
+    
+    const [result] = await db.pool.query(
+      'DELETE FROM stock_prices WHERE date < ?',
+      [dateStr]
+    );
+    res.json({ success: true, deleted: result.affectedRows, cutoffDate: dateStr });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/stats/database', async (req, res) => {
+  try {
+    const [prices] = await db.pool.query(
+      'SELECT COUNT(*) as count, MIN(date) as oldest, MAX(date) as newest, MAX(id) as max_id FROM stock_prices'
+    );
+    const [results] = await db.pool.query(
+      'SELECT COUNT(*) as count, MAX(id) as max_id FROM backtest_results'
+    );
+    const [trades] = await db.pool.query(
+      'SELECT COUNT(*) as count, MAX(id) as max_id FROM backtest_trades'
+    );
+    res.json({
+      stock_prices: prices[0],
+      backtest_results: results[0],
+      backtest_trades: trades[0]
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -177,8 +257,7 @@ async function fetchAndSaveData(symbol, startDate, endDate) {
       const csvPath = path.join(__dirname, '../API_pull/data', csvFile);
       if (!fs.existsSync(csvPath)) return reject(new Error(`CSV 파일 없음: ${csvPath}`));
 
-      // 기존 데이터 제거 후 삽입
-      await db.pool.query('DELETE FROM stock_prices WHERE symbol = ?', [symbol]);
+      // UNIQUE KEY를 이용한 중복 방지 (ID 증가 방지)
       const content = fs.readFileSync(csvPath, 'utf8').trim();
       const lines = content.split(/\r?\n/);
       const headers = lines[0].split(',');
@@ -190,8 +269,9 @@ async function fetchAndSaveData(symbol, startDate, endDate) {
         if (!row.date) continue;
         const d = `${row.date.slice(0, 4)}-${row.date.slice(4, 6)}-${row.date.slice(6, 8)}`;
         await db.pool.query(
-      `INSERT INTO stock_prices (symbol, trade_date, open, close, rsi, avg_gain, avg_loss)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO stock_prices (symbol, date, open, close, rsi, avg_gain, avg_loss)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE open=VALUES(open), close=VALUES(close), rsi=VALUES(rsi), avg_gain=VALUES(avg_gain), avg_loss=VALUES(avg_loss)`,
           [symbol, d, row.open, row.close, row.rsi || null, row.avg_gain || null, row.avg_loss || null],
         );
       }
@@ -202,17 +282,17 @@ async function fetchAndSaveData(symbol, startDate, endDate) {
 }
 
 async function loadPriceRows({ symbol, startDate, endDate }) {
-  let query = 'SELECT trade_date AS date, open, close, rsi FROM stock_prices WHERE symbol = ?';
+  let query = 'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ?';
   const params = [symbol];
   if (startDate) {
-    query += ' AND trade_date >= ?';
+    query += ' AND date >= ?';
     params.push(startDate);
   }
   if (endDate) {
-    query += ' AND trade_date <= ?';
+    query += ' AND date <= ?';
     params.push(endDate);
   }
-  query += ' ORDER BY trade_date';
+  query += ' ORDER BY date';
   const [rows] = await db.pool.query(query, params);
   return rows;
 }
@@ -293,7 +373,23 @@ async function runBacktestPrice({ symbol, startDate, endDate, initialCash, buyPr
     };
   });
 
+  // DB에 백테스트 결과 저장
+  const [resultInsert] = await db.pool.query(
+    'INSERT INTO backtest_results (initial_cash, final_cash, total_trades, profit) VALUES (?, ?, ?, ?)',
+    [initialCash, finalValue, trades.length, profit]
+  );
+  const backtestId = resultInsert.insertId;
+
+  // 거래 내역 저장
+  for (const trade of trades) {
+    await db.pool.query(
+      'INSERT INTO backtest_trades (backtest_id, trade_date, trade_type, price, shares, amount) VALUES (?, ?, ?, ?, ?, ?)',
+      [backtestId, trade.date, trade.type, trade.price, trade.shares, trade.amount]
+    );
+  }
+
   return {
+    backtestId,
     params: { strategy: '가격 기반', buyPrice, sellPrice, initialCash, periodStart: startDate, periodEnd: endDate },
     equityLabels: labels,
     equityData: equity,
@@ -372,7 +468,23 @@ async function runBacktestRSI({ symbol, startDate, endDate, initialCash, buyRSI,
     };
   });
 
+  // DB에 백테스트 결과 저장
+  const [resultInsert] = await db.pool.query(
+    'INSERT INTO backtest_results (initial_cash, final_cash, total_trades, profit) VALUES (?, ?, ?, ?)',
+    [initialCash, finalValue, trades.length, profit]
+  );
+  const backtestId = resultInsert.insertId;
+
+  // 거래 내역 저장
+  for (const trade of trades) {
+    await db.pool.query(
+      'INSERT INTO backtest_trades (backtest_id, trade_date, trade_type, price, shares, amount) VALUES (?, ?, ?, ?, ?, ?)',
+      [backtestId, trade.date, trade.type, trade.price, trade.shares, trade.amount]
+    );
+  }
+
   return {
+    backtestId,
     params: { strategy: 'RSI 전략', buyRSI, sellRSI, initialCash, periodStart: startDate, periodEnd: endDate },
     equityLabels: labels,
     equityData: equity,

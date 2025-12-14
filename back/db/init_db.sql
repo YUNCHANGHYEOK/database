@@ -4,7 +4,7 @@ CREATE DATABASE IF NOT EXISTS stock_database DEFAULT CHARACTER SET utf8mb4 COLLA
 
 USE stock_database;
 
--- 주식 일봉 데이터 (RSI 포함, 다종목 지원)
+-- 주식 일봉 데이터
 CREATE TABLE IF NOT EXISTS stock_prices (
     id INT AUTO_INCREMENT PRIMARY KEY,
     symbol VARCHAR(20) NOT NULL,
