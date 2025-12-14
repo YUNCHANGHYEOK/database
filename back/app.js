@@ -1,7 +1,6 @@
 const http = require("http");
 const db = require("./db");
 
-// 서버 시작 시 DB 연결 테스트
 db.testConnection().then(success => {
   if (success) {
     console.log("✅ 데이터베이스 연결 성공!");
@@ -12,7 +11,6 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   
-  // 데이터 수집 API
   if (req.url === "/api/fetch-data" && req.method === "POST") {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -30,7 +28,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 주식 데이터 조회 API (기간 필터링 지원)
   if (req.url.startsWith("/api/stock-data") && req.method === "GET") {
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
@@ -61,7 +58,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 데이터베이스 초기화 API
   if (req.url === "/api/reset-database" && req.method === "POST") {
     try {
       await db.pool.query('DELETE FROM backtest_trades');
@@ -76,7 +72,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 백테스팅 실행 API (가격 기반)
   if (req.url === "/backtest" && req.method === "POST") {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -94,7 +89,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 백테스팅 실행 API (RSI 기반)
   if (req.url === "/backtest-rsi" && req.method === "POST") {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -112,7 +106,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   
-  // 정적 파일 서빙 (CSS, JS)
   if (req.url === "/style.css") {
     const fs = require('fs');
     const path = require('path');
@@ -145,7 +138,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   
-  // 기본 페이지 - front/index.html 서빙
   if (req.url === "/") {
     const fs = require('fs');
     const path = require('path');
@@ -412,9 +404,7 @@ const server = http.createServer(async (req, res) => {
   res.end(JSON.stringify({ error: "Not Found" }));
 });
 
-// 백테스팅 로직 (가격 기반)
 async function runBacktestPrice(initialCash, buyPrice, sellPrice, symbol = '005930') {
-  // DB에서 해당 종목 데이터 조회
   const [rows] = await db.pool.query(
     'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ? ORDER BY date',
     [symbol]
@@ -426,7 +416,7 @@ async function runBacktestPrice(initialCash, buyPrice, sellPrice, symbol = '0059
   const tradeHistory = [];
   
   for (const day of rows) {
-    // 매도 조건: 종가가 매도가격 이상이고 보유주식이 있을 때 (먼저 체크)
+    // 매도 먼저 체크 (종가)
     if (day.close >= sellPrice && shares > 0) {
       const amount = shares * day.close;
       cash += amount;
@@ -441,7 +431,7 @@ async function runBacktestPrice(initialCash, buyPrice, sellPrice, symbol = '0059
       trades++;
     }
     
-    // 매수 조건: 시가가 매수가격 이하이고 주식을 보유하지 않았을 때
+    // 매수 체크 (시가)
     if (day.open <= buyPrice && shares === 0 && cash >= day.open) {
       shares = Math.floor(cash / day.open);
       const amount = shares * day.open;
@@ -457,7 +447,7 @@ async function runBacktestPrice(initialCash, buyPrice, sellPrice, symbol = '0059
     }
   }
   
-  // 남은 주식 정리
+  // 마지막 날 남은 주식 처분
   if (shares > 0 && rows.length > 0) {
     const lastPrice = rows[rows.length - 1].close;
     const amount = shares * lastPrice;
@@ -499,9 +489,7 @@ async function runBacktestPrice(initialCash, buyPrice, sellPrice, symbol = '0059
   };
 }
 
-// 백테스팅 로직 (RSI 기반)
 async function runBacktestRSI(initialCash, buyRSI, sellRSI, symbol = '005930') {
-  // DB에서 해당 종목 데이터 조회
   const [rows] = await db.pool.query(
     'SELECT date, open, close, rsi FROM stock_prices WHERE symbol = ? AND rsi IS NOT NULL ORDER BY date',
     [symbol]
@@ -514,11 +502,8 @@ async function runBacktestRSI(initialCash, buyRSI, sellRSI, symbol = '005930') {
   
   for (const day of rows) {
     const rsi = parseFloat(day.rsi);
-    
-    // RSI 값이 유효하지 않으면 스킵
     if (isNaN(rsi)) continue;
     
-    // 매수 조건: RSI가 매수 기준 이하이고 현금이 있을 때
     if (rsi <= buyRSI && shares === 0 && cash >= day.open) {
       shares = Math.floor(cash / day.open);
       const amount = shares * day.open;
@@ -533,7 +518,6 @@ async function runBacktestRSI(initialCash, buyRSI, sellRSI, symbol = '005930') {
         rsi: rsi
       });
     }
-    // 매도 조건: RSI가 매도 기준 이상이고 보유주식이 있을 때
     else if (rsi >= sellRSI && shares > 0) {
       const amount = shares * day.close;
       cash += amount;

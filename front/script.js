@@ -1,4 +1,3 @@
-// 초기화: 시간 표기, 애니메이션, 네비게이션, 기본 데이터 로드
 document.addEventListener('DOMContentLoaded', () => {
     updateTime();
     addAnimations();
@@ -11,14 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 400);
 });
 
-// 모든 차트 인스턴스 관리
 const chartInstances = {};
 
-// 백테스팅 결과 히스토리 (최대 10개)
 let backtestHistory = [];
 const MAX_HISTORY = 10;
 
-// 현재 시간 표시
 function updateTime() {
     const now = new Date();
     const timeString = now.toLocaleString('ko-KR', {
@@ -35,7 +31,6 @@ function updateTime() {
     });
 }
 
-// 주식 차트 로드 (백엔드 /api/stock-data 사용)
 function loadStockChart(symbol, canvasId = 'stockChart', silent = false) {
     const ticker = extractTicker(symbol || '005930');
     
@@ -63,7 +58,6 @@ function loadStockChart(symbol, canvasId = 'stockChart', silent = false) {
         });
 }
 
-// 통계 업데이트
 function updateStatsFromData(data) {
     if (!data || data.length === 0) return;
     
@@ -77,7 +71,6 @@ function updateStatsFromData(data) {
     
     if (topMoverEl) {
         let rsiValue = 'N/A';
-        // 전체 기간의 평균 RSI 계산
         const validRsi = data.filter(d => d.rsi !== null && d.rsi !== undefined);
         if (validRsi.length > 0) {
             const sum = validRsi.reduce((acc, d) => acc + parseFloat(d.rsi), 0);
@@ -90,7 +83,6 @@ function updateStatsFromData(data) {
     }
 }
 
-// 카드/기능 섹션 진입 애니메이션
 function addAnimations() {
     const cards = document.querySelectorAll('.stock-card, .feature-card, .stat-card, .panel');
     const observer = new IntersectionObserver(entries => {
@@ -110,7 +102,6 @@ function addAnimations() {
     });
 }
 
-// 차트 렌더러
 function renderStockChart(chartData, symbol, canvasId) {
     const ctx = document.getElementById(canvasId);
     if (!ctx) return;
@@ -219,7 +210,6 @@ function renderStockChart(chartData, symbol, canvasId) {
     });
 }
 
-// 페이지 네비게이션
 function wireNavigation() {
     const buttons = document.querySelectorAll('[data-page-btn]');
     buttons.forEach(btn => {
@@ -235,7 +225,6 @@ function wireNavigation() {
     });
 }
 
-// 검색 박스/버튼
 function wireSearch() {
     const searchInput = document.getElementById('tickerSearch');
     const searchButton = document.getElementById('searchButton');
@@ -259,7 +248,6 @@ function wireSearch() {
     });
 }
 
-// 차트 버튼/카드 이벤트
 function wireTickerButtons() {
     const chartLoadButton = document.getElementById('chartLoadButton');
 
@@ -274,7 +262,6 @@ function wireTickerButtons() {
     });
 }
 
-// 페이지 전환
 function switchPage(target) {
     const buttons = document.querySelectorAll('[data-page-btn]');
     buttons.forEach(b => {
@@ -285,15 +272,12 @@ function switchPage(target) {
     });
 }
 
-// 코드 추출
 function extractTicker(text) {
     return text.replace(/\.KS|\.KQ/gi, '').replace(/[^0-9A-Za-z]/g, '').trim();
 }
 
-// 1분마다 시간 갱신
 setInterval(updateTime, 60000);
 
-// 창 크기 변경 시 차트 리사이즈
 let resizeTimeout;
 window.addEventListener('resize', function() {
     clearTimeout(resizeTimeout);
@@ -302,22 +286,17 @@ window.addEventListener('resize', function() {
     }, 250);
 });
 
-// ==================== 데이터 수집 기능 ====================
-
-// 날짜 형식 변환 (YYYYMMDD <-> YYYY-MM-DD)
 function formatDate(input) {
     if (!input) return '';
     const cleaned = input.replace(/[^0-9]/g, '');
     
     if (cleaned.length === 8) {
-        // YYYYMMDD -> YYYY-MM-DD
         return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 6)}-${cleaned.slice(6, 8)}`;
     }
     
-    return input; // 이미 YYYY-MM-DD 형식이면 그대로 반환
+    return input;
 }
 
-// 데이터 수집 실행
 async function collectData() {
     const symbolInput = document.getElementById('collectSymbol');
     const startDateInput = document.getElementById('collectStartDate');
@@ -332,7 +311,6 @@ async function collectData() {
     const startDate = formatDate(startDateInput.value.trim());
     const endDate = formatDate(endDateInput.value.trim());
     
-    // 유효성 검사
     if (!symbol) {
         showToast('종목 코드를 입력하세요', '종목 코드는 필수입니다', 'error');
         return;

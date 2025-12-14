@@ -1,7 +1,6 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-// MySQL 연결 풀 생성
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 3306,
@@ -10,7 +9,6 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME || 'stock_database'
 });
 
-// 데이터베이스 연결 테스트
 async function testConnection() {
     try {
         const connection = await pool.getConnection();

@@ -1,4 +1,4 @@
-"""Fetch daily OHLC data from Kiwoom REST API, compute RSI, and export to CSV."""
+"""키움증권 API로 일봉 데이터 가져와서 RSI 계산 후 CSV 저장"""
 
 from __future__ import annotations
 
@@ -12,15 +12,14 @@ from typing import Dict, List
 import requests
 
 
-# 모의투자/실계좌 모드에 따라 기본 URL 분기
 DEFAULT_PAPER_URL = "https://mockapi.kiwoom.com"
-DEFAULT_LIVE_URL = "https://openapi.kiwoom.com"  # 실계좌 사용 시 필요에 따라 수정
+DEFAULT_LIVE_URL = "https://openapi.kiwoom.com"
 
 APP_KEY = os.getenv("KIWOOM_APP_KEY", "O3kJjNLr_qpv4UaI_dlJcu4NZf_8Q4AIGXMu2UZr5WE")
 SECRET_KEY = os.getenv("KIWOOM_SECRET_KEY", "AVTWCe2Wi6h4HX3q3oly0FN2Gq5VsvWNz_W7M9c0kNY")
-MODE = os.getenv("KIWOOM_MODE", "paper").lower()  # 모의투자로 복구
+MODE = os.getenv("KIWOOM_MODE", "paper").lower()
 BASE_URL = os.getenv("KIWOOM_BASE_URL") or (DEFAULT_PAPER_URL if MODE == "paper" else DEFAULT_LIVE_URL)
-OUTPUT_DIR = Path(__file__).parent / "data"  # data 폴더에 저장
+OUTPUT_DIR = Path(__file__).parent / "data"
 
 
 class KiwoomAPIError(Exception):
@@ -103,10 +102,7 @@ def fetch_daily_ohlc(token: str, symbol: str, *, base_date: str | None, rows: in
             }
         )
 
-    # Sort by date ascending to ensure RSI is calculated chronologically
     parsed.sort(key=lambda row: row["date"])
-    
-    # Return all data for RSI calculation (filtering will happen after RSI computation)
     return parsed[-rows:] if len(parsed) > rows else parsed
 
 
@@ -149,14 +145,13 @@ def compute_rsi(ohlc: List[Dict], period: int, start_date: str | None = None, en
             }
         )
 
-    # Filter by date range after RSI calculation
     if start_date or end_date:
         filtered = []
         for row in rsi_rows:
             date = row["date"]
             if start_date and date < start_date:
                 continue
-            if end_date and date > end_date:  # > 는 유지 (종료일 포함하려면 API에서 충분한 데이터 필요)
+            if end_date and date > end_date:
                 continue
             filtered.append(row)
         return filtered
